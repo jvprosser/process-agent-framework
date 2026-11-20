@@ -56,8 +56,8 @@ class _Client:
 
 
 def _catalog(monkeypatch):
-    def fake_execute(*, op, label, params, catalog_file, **_kwargs):
-        assert catalog_file == PACKS / "underwriting" / "catalog" / "catalog.yaml"
+    def fake_execute(op, label, params, manager):
+        assert manager.catalog_path == PACKS / "underwriting" / "catalog" / "catalog.yaml"
         if op == "write":
             assert label == "write_submission_decline"
             assert params["run_id"]
@@ -66,9 +66,9 @@ def _catalog(monkeypatch):
         fixture = PACKS / "underwriting" / "fixtures" / label / f"{params['claim_id']}.json"
         return json.loads(fixture.read_text(encoding="utf-8"))
 
-    import rules_engine.named_catalog as named_catalog
+    import core.tools as tools
 
-    monkeypatch.setattr(named_catalog, "execute", fake_execute)
+    monkeypatch.setattr(tools, "_call_mcp", fake_execute)
 
 
 def test_orchestrator_extracts_entity_id_and_returns_none_without_one():

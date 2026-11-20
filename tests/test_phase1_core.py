@@ -62,16 +62,14 @@ def test_tools_are_native_and_route_from_the_playbook(monkeypatch, tmp_path: Pat
         "evaluate_playbook",
     ]
 
-    def fake_execute(*, op, label, params, catalog_file, **_kwargs):
-        assert catalog_file == PACKS / "underwriting" / "catalog" / "catalog.yaml"
+    def fake_execute(op, label, params, manager):
+        assert manager.catalog_path == PACKS / "underwriting" / "catalog" / "catalog.yaml"
         if op == "write":
             return {"ok": True, "named_op": label, "named_op_kind": "write"}
         fixture = PACKS / "underwriting" / "fixtures" / label / f"{params['claim_id']}.json"
         return json.loads(fixture.read_text(encoding="utf-8"))
 
-    import rules_engine.named_catalog as named_catalog
-
-    monkeypatch.setattr(named_catalog, "execute", fake_execute)
+    monkeypatch.setattr(tools, "_call_mcp", fake_execute)
 
     built = tools.build_session_graph("9100")
     case_path = Path(built["session_case"])

@@ -1,1 +1,0 @@
-"""Impala + underwriting helper tools."""

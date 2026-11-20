@@ -1,1 +1,0 @@
-"""Impala + distribution helper tools."""

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +127,36 @@ def evaluate_playbook() -> dict:
     return route
 
 
+def _mcp_process(manager: PackManager) -> tuple[list[str], dict[str, str]]:
+    src = Path(__file__).resolve().parents[2] / "mcp_forks" / "iceberg-mcp-server" / "src"
+    env = os.environ.copy()
+    env["PACK_DIR"] = str(manager.root)
+    previous = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(src) + (os.pathsep + previous if previous else "")
+    return [sys.executable, "-m", "iceberg_mcp_server"], env
+
+
+def _call_mcp(op: str, label: str, params: dict, manager: PackManager) -> dict:
+    """Spawn the unified catalog server with the active pack directory."""
+    argv, env = _mcp_process(manager)
+    request = json.dumps({"op": op, "label": label, "params": params})
+    completed = subprocess.run(
+        [*argv, "--call", request],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    stdout = completed.stdout.strip()
+    if not stdout:
+        detail = completed.stderr.strip() or f"exit {completed.returncode}"
+        raise RuntimeError(f"iceberg-mcp-server failed: {detail}")
+    result = json.loads(stdout)
+    if not isinstance(result, dict):
+        raise RuntimeError(f"Catalog {op} '{label}' did not return an object")
+    return result
+
+
 def _run_catalog(op: str, label: str, params: dict) -> dict:
     manager = PackManager.active()
     name = str(label or "").strip()
@@ -131,18 +164,7 @@ def _run_catalog(op: str, label: str, params: dict) -> dict:
         raise RuntimeError("label is required")
     if not isinstance(params, dict):
         raise RuntimeError("params must be an object")
-
-    from rules_engine import named_catalog
-
-    result = named_catalog.execute(
-        op=op,
-        label=name,
-        params=params,
-        catalog_file=manager.catalog_path,
-    )
-    if not isinstance(result, dict):
-        raise RuntimeError(f"Catalog {op} '{name}' did not return an object")
-    return result
+    return _call_mcp(op, name, params, manager)
 
 
 def _entity_params(manager: PackManager, entity_id: str) -> dict[str, str]:

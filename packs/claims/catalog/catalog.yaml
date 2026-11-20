@@ -20,7 +20,7 @@ reads:
     required: [claim_id]
     optional: [database]
     summary: Litigation case business columns
-    handler: get_litigation_view
+    sql: sql/get_litigation_view.sql
   get_bi_view:
     required: [claim_id]
     optional: [database]
@@ -35,7 +35,7 @@ reads:
     required: [claim_id]
     optional: [database]
     summary: Police, intake incident number, and fault
-    handler: get_pd_view
+    sql: sql/get_pd_view.sql
   get_deny_view:
     required: [claim_id]
     optional: [database]

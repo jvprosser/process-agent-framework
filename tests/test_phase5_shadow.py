@@ -196,14 +196,12 @@ def _evaluate(entity: str, case: dict) -> dict:
 def _distribution(monkeypatch, entity: str) -> tuple[dict, dict]:
     PackManager("retirement_distributions", str(PACKS))
 
-    def fake_execute(*, op, label, params, catalog_file, **_kwargs):
+    def fake_execute(op, label, params, manager):
         assert op == "query"
         fixture = PACKS / "retirement_distributions" / "fixtures" / label / f"{params['claim_id']}.json"
         return json.loads(fixture.read_text(encoding="utf-8"))
 
-    import rules_engine.named_catalog as named_catalog
-
-    monkeypatch.setattr(named_catalog, "execute", fake_execute)
+    monkeypatch.setattr(tools, "_call_mcp", fake_execute)
     tools.build_session_graph(entity)
     decision = tools.evaluate_playbook()
     case = json.loads(Path(tools._session_case_path).read_text(encoding="utf-8"))

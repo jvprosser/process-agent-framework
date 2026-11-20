@@ -45,7 +45,7 @@ class _Client:
     chat = _Chat()
 
 
-def _execute(*, op, label, params, catalog_file, **_kwargs):
+def _execute(op, label, params, manager):
     QUERIES.append((op, label))
     if op == "query" and label == "get_pd_view":
         assert params["claim_id"] == "401"
@@ -82,9 +82,9 @@ def _route(letter: bool) -> dict:
 
 def test_view_label_and_letter_actions(monkeypatch):
     QUERIES.clear()
-    import rules_engine.named_catalog as named_catalog
+    import core.tools as tools
 
-    monkeypatch.setattr(named_catalog, "execute", _execute)
+    monkeypatch.setattr(tools, "_call_mcp", _execute)
     monkeypatch.setattr(chat_api, "local_client", lambda: _Client())
     monkeypatch.setattr(chat_api, "run_intake", lambda entity_id, client, pack: _route(True))
     response = TestClient(app).post(
@@ -109,9 +109,9 @@ def test_view_label_and_letter_actions(monkeypatch):
 
 def test_actions_stay_empty_without_a_letter(monkeypatch):
     QUERIES.clear()
-    import rules_engine.named_catalog as named_catalog
+    import core.tools as tools
 
-    monkeypatch.setattr(named_catalog, "execute", _execute)
+    monkeypatch.setattr(tools, "_call_mcp", _execute)
     monkeypatch.setattr(chat_api, "local_client", lambda: _Client())
     monkeypatch.setattr(chat_api, "run_intake", lambda entity_id, client, pack: _route(False))
     response = TestClient(app).post(
