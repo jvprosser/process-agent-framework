@@ -1,0 +1,99 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font: 15px/1.45 system-ui, sans-serif;
+  color: #1c1c1c;
+}
+
+body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100vh;
+}
+
+.pane {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat { border-right: 1px solid #d5d5d5; background: #f7f7f5; }
+
+.bar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #d5d5d5;
+  background: #fff;
+}
+
+.history {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message {
+  max-width: 90%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #e7eef8;
+}
+
+.message.agent {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid #e2e2e2;
+}
+
+#composer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid #d5d5d5;
+  background: #fff;
+}
+
+#prompt {
+  flex: 1;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
+
+button, select { font: inherit; }
+
+.debug { background: #1b1d21; color: #e8e8e8; }
+
+.debug .bar {
+  background: #111317;
+  color: #e8e8e8;
+  border-bottom-color: #333;
+}
+
+.viewer {
+  flex: 1 1 auto;
+  margin: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.viewer code {
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre;
+}

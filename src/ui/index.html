@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Process agent harness</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section class="pane chat" aria-label="Chat">
+    <header class="bar">
+      <label for="pack">Pack</label>
+      <select id="pack">
+        <option value="claims">claims</option>
+        <option value="underwriting" selected>underwriting</option>
+        <option value="retirement_distributions">retirement_distributions</option>
+        <option value="retirement_rollovers">retirement_rollovers</option>
+      </select>
+    </header>
+    <div id="history" class="history" aria-live="polite"></div>
+    <form id="composer">
+      <input id="prompt" type="text" autocomplete="off" placeholder="Ask about an entity id" required>
+      <button type="submit">Send</button>
+    </form>
+  </section>
+  <section class="pane debug" aria-label="Envelope">
+    <header class="bar">Envelope</header>
+    <pre class="viewer"><code id="envelope"></code></pre>
+  </section>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

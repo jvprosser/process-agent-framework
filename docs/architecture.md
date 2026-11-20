@@ -1,8 +1,8 @@
 # Architecture and patterns
 
-High-level view for data engineers. This stack routes operational cases (auto claims today; retirement distributions/rollovers and underwriting submissions on the same control plane) on Cloudera: Iceberg via Impala, a Git-reviewed JSON case schema + YAML playbook, and Cloudera AI Agent Studio. The LLM is the NL front door. It is not the rules engine.
+High-level view for data engineers. This stack routes operational cases (auto claims, retirement distributions and rollovers, and underwriting submissions) on Cloudera: Iceberg via Impala, a Git-reviewed JSON case schema, and a YAML playbook. A local Mistral model is the natural-language front door and tool orchestrator. The CEL playbook chooses `next_step`, `agent_role`, and `lane`. FastAPI returns a four-node JSON envelope for the UI. Decision record: [ADR 0002](adr/0002-migration-to-mistral-agent-sdk.md).
 
-Related: [ADR 0001](adr/0001-agent-studio-mcp-and-tool-layout.md), [MCP fork charter](mcp-fork-charter.md), [Atlas/Ranger plan](atlas-ranger-integration-plan.md), [finserv packs](finserv-pattern-pack.md), [probe/action test prompts](probe-action-tests.md), [RDF/SPARQL restore](rdf-sparql-branch.md).
+Related: [ADR 0001](adr/0001-agent-studio-mcp-and-tool-layout.md), [ADR 0002](adr/0002-migration-to-mistral-agent-sdk.md), [MCP fork charter](mcp-fork-charter.md), [Atlas/Ranger plan](atlas-ranger-integration-plan.md), [finserv packs](finserv-pattern-pack.md), [probe/action test prompts](probe-action-tests.md), [RDF/SPARQL restore](rdf-sparql-branch.md).
 
 ## Problem split
 
@@ -19,24 +19,34 @@ Atlas (deferred) would answer “what *is* this table/column in the ontology?”
 ## Runtime topology
 
 ```text
-User
-  └─ Orchestrator          no tools; Delegate only
-       ├─ Intake Agent     MCP catalog + Studio build / validate / route
-       ├─ Routing Agent    cosine pre_route_text (NL triage only)
-       └─ Specialist       MCP view label (if any) + playbook write
+User UI
+  └─ FastAPI (/api/v1/chat, /api/v1/action)
+       └─ Mistral Orchestrator     Extracts entity_id
+            ├─ Intake Agent        build_session_graph, then evaluate_playbook
+            └─ Specialist Agent    run_named_query (view), then run_named_write
 ```
 
-**Structured intake** (user supplies a case/claim id):
+The model server is local. `MISTRAL_LOCAL_URL` defaults to `http://localhost:8000/v1` (vLLM). Set it to `http://localhost:11434/v1` for Ollama. There is no cloud fallback.
 
-1. Orchestrator Delegates once to Intake Agent (Role `Intake Agent`).
-2. Intake Agent calls `run_named_query` for spine, then routing signals (catalog **labels**, not extra MCP tools).
-3. Intake Agent passes those JSON payloads, unmodified, into `build_claim_graph` → `validate_claim_graph` → `route_claim`.
-4. Intake Agent stops. Orchestrator Delegates once to Observation `coworker` (playbook YAML). If `coworker` is omitted, Final Answer the route JSON.
-5. Specialist may run one view label, then the playbook write (`create_litigation_task`, `create_pd_task`, `deny_claim`, or `write_audit_event`; Closeout and `DenyAudit` also `promote_audit_run`). `CollectIncidentReportNumber` writes `claim_{id}_sms.txt` when `sms_written` is true. `WaitForIncidentNumber` audits only (SMS already sent). `LitigationSupport`, `RequestPoliceReport`, and Deny steps mark a letter as recommended (`letter_on_request`); Studio `save_claim_letter` runs for those letters only when the user asks to write it.
+**Structured intake** (pack-driven):
 
-Custom Studio tools **cannot** call MCP in-process. The agent is the only bridge: MCP result → tool argument → session artifact.
+1. `POST /api/v1/chat` carries `pack_id` and `user_text`. `PackManager` mounts `packs/<pack_id>`.
+2. The Orchestrator parses the user string and returns the alphanumeric entity id, or no id.
+3. The Intake Agent runs `build_session_graph`, which reads the catalog spine and routing-signal labels and writes `SESSION_DIRECTORY/claim_{id}_case.json`. It then runs `evaluate_playbook`.
+4. The playbook evaluates CEL against that session JSON and returns `next_step`, `agent_role`, `allowed_tools`, and `write`.
+5. A Specialist Agent loads `packs/<domain>/agents/<agent_role>.md`. It runs the first allowed `get_*` view through `run_named_query`, then the playbook write through `run_named_write`, and returns a short summary.
+6. The API places the route, the view JSON, and the specialist text in the four-node envelope.
 
-Unstructured notes go to Routing Agent (`pre_route_text`, TF-IDF cosine). If a `claim_id` is present, structured intake still wins. Cosine does not override playbook probes.
+A message with no entity id returns the envelope with fallback chat text and does not run intake. When the playbook sets `letter_on_request`, `actions.tool_invocations` offers `save_claim_letter`. `POST /api/v1/action` runs that tool and writes `claim_{id}_letter.txt`, or `claim_{id}_sms.txt` when `letter_type` is `sms` or `CollectIncidentReportNumber`. The file stays in the session directory.
+
+## Pattern: abstract UI envelope
+
+`/api/v1/chat` returns JSON with four nodes. The root is not markdown.
+
+* **`meta`**: `pack_id`, `run_id`, `entity_id`, `terminal`.
+* **`layout`**: `template`, `widgets`, `focus`. The chat route uses `split_pane`, widgets `chat_feed` and `routing_summary_panel`, focus `chat_feed`.
+* **`content`**: specialist `chat_text`, CEL `routing_summary` (`next_step`, `agent_role`, `lane`, `routing_reason`), `checks`, and raw `view_data` from the allowed read.
+* **`actions`**: `quick_replies` and `tool_invocations`. A tool invocation is a pre-filled body for `POST /api/v1/action` (`intent` plus `payload`), including `save_claim_letter`.
 
 ## Pattern: allow-listed lake access (not free SQL)
 
@@ -66,11 +76,11 @@ Mapping from lake JSON → case JSON is code (claims builder) or `pack.yaml` fie
 
 Probes bind CEL expressions to the case document (`litigation_indicator`, `triangle`, …). Rules are reviewed as YAML + CEL, not as prompt text and not as Iceberg UI config. MCP named queries still project lake facts onto that document.
 
-The playbook can name specialists that have not been configured in Agent Studio yet (`SiuAgent`, `SettlementAgent`, `DataQualityAgent`). Orchestrator must Final Answer the route JSON rather than invent a Role. `DenyAgent` and `HumanCitationReview` are now configured in Agent Studio.
+A pack specialist needs exactly one `agents/<agent_role>.md`. `packs/claims` has the playbook and catalog and does not yet have those prompt files. `SiuAgent`, `SettlementAgent`, and `DataQualityAgent` have no prompt file.
 
 A **notice is not a claim**. First notice lives on `fnol` (`fnol_id` 88 / `FNOL-2026-00088`) until `convert_fnol_to_claim` inserts a `claim` row (`80000+fnol_id` → **80088**). `deny_fnol` never calls `deny_claim`. Claim chats stay `Please process claim 401.` for the seed PD file. FNOL chats are `Please process FNOL 88.` After convert, `Please process claim 80088` uses the claim playbook (PD on 80088; leave 401 alone). Convert-then-PD runbook: [fnol-path-demo.md](fnol-path-demo.md#3-convert-then-pd-claim-80088).
 
-FNOL → payout is **not** one crew run. The claims platform (or BPA) writes Iceberg rows; this stack classifies the current snapshot. Re-chat the Orchestrator with the same claim id after the data changes (`Please process claim 401.`). Do not pass `run_id` or `next_step` in the chat. Live FNOL runbook: [fnol-path-demo.md](fnol-path-demo.md).
+FNOL through payout is a series of snapshots. The claims platform (or BPA) writes Iceberg rows; this stack classifies the current snapshot. Send another chat with the same entity id after the data changes (`Please process claim 401.`). Leave `run_id` and `next_step` out of the user text. Live FNOL runbook: [fnol-path-demo.md](fnol-path-demo.md).
 
 ### Typical PD path (separate calls)
 
@@ -113,30 +123,36 @@ Thin tools: each Studio tool is `tool.py` + `requirements.txt` only. Shared logi
 
 MCP is a **separate** `uvx` stdio process started by the workflow engine. It inherits engine env plus the MCP registration `env` block. It does **not** get the tool-sandbox `/workflow_data` mount. Lake credentials (`IMPALA_*`) live on that MCP env, not in tool `UserParameters`.
 
-## Pattern: domain packs (same control plane)
+## Pattern: domain packs (abstracted control plane)
 
-A **pack** swaps schema JSON, playbook, cosine exemplars, and (for offline tests) fixture payloads. Studio tools stay `build_claim_graph` / `claim_id`. Claims MCP stays claims-only.
+A **pack** holds the domain logic. `src/` loads whichever pack `pack_id` names.
 
-Claims today is the **default product**: walk-up to repo-root `ontology/` + `playbook/`. Do not move those trees until 402 has been proven from a pointer pack.
+| Component | Path | Function |
+|---|---|---|
+| Ontology | `packs/<domain>/ontology/*.json` | JSON schema mapping lake rows onto the session graph |
+| Router | `packs/<domain>/playbook/playbook.yaml` | CEL probes on case JSON paths, in priority order |
+| Catalog | `packs/<domain>/catalog/catalog.yaml` | Allow-listed Impala labels for MCP reads and writes |
+| Agents | `packs/<domain>/agents/*.md` | Specialist system prompts, one file per `agent_role` |
+| Fixtures | `packs/<domain>/fixtures/` | Static JSON for offline shadow checks |
 
-**Distributions (live):** Impala database `retirement_distributions` + MCP `iceberg-mcp-server-finserv` (`INS_FINSERV_MCP_V4`). Compiled labels only — no `PACK_ROOT`. Pack fixture JSON remains golden for `agent_studio/tests/test_packs.py`.
+`pack.yaml` names `case_id_param`, the ontology file, and the catalog reads. Claims lives in `packs/claims`.
 
-**Underwriting (live):** Impala database `underwriting` + MCP `iceberg-mcp-server-underwriting` (`INS_UW_MCP_V1`). Compiled labels only — no `PACK_ROOT`. Studio `claim_id` is the submission id. Pack fixture JSON remains golden for `agent_studio/tests/test_underwriting_pack.py`. Runbook: [packs/underwriting/README.md](../packs/underwriting/README.md).
+**Distributions (live):** Impala database `retirement_distributions` + MCP `iceberg-mcp-server-finserv` (`INS_FINSERV_MCP_V4`). Compiled labels only. Pack fixture JSON remains the golden file for `agent_studio/tests/test_packs.py` and `tests/test_phase5_shadow.py` seed **7001**.
 
-**Rollovers:** still fixture / `PACK_ROOT` on the claims MCP until distributions e2e is proven. Details: [finserv-pattern-pack-status.md](finserv-pattern-pack-status.md).
+**Underwriting (live):** Impala database `underwriting` + MCP `iceberg-mcp-server-underwriting` (`INS_UW_MCP_V1`). Compiled labels only. The session id is the submission id. Pack fixture JSON remains golden for `agent_studio/tests/test_underwriting_pack.py`. Runbook: [packs/underwriting/README.md](../packs/underwriting/README.md).
+
+**Rollovers:** fixture JSON under `packs/retirement_rollovers/`. Details: [finserv-pattern-pack-status.md](finserv-pattern-pack-status.md).
 
 ## Pattern: agents as a thin control plane
 
 | Agent | Tools | Job |
 |---|---|---|
-| Orchestrator | None | Sequence and handoff; user cannot skip it |
-| Intake Agent | MCP + build/validate/route | Intake and one-shot catalog calls; stop after route |
-| Routing | `pre_route_text` only | Coarse NL label; not authoritative when an id is present |
-| Specialist | MCP (+ `save_claim_letter` when mapped) | One view (if mapped) + playbook write |
+| Orchestrator | Structured entity extraction | Read `user_text` and return the entity id |
+| Intake Agent | `build_session_graph`, `evaluate_playbook` | Materialize the session JSON and return the playbook route |
+| Specialist | `run_named_query`, `run_named_write` | One allowed view, then the playbook write, then a short summary |
+| UI action | `save_claim_letter` via `/api/v1/action` | Write the session letter or SMS file when the user asks |
 
-CrewAI `Delegate` matches **Role**, not Name. Intake Role must be exactly `Intake Agent` (not `Manager agent`, which collides with Studio’s hierarchical Manager UI). Studio cutover: [`agent_studio/studio_tools/agents/manager_agent.md`](../agent_studio/studio_tools/agents/manager_agent.md).
-
-The LLM is justified for NL ops and unstructured text. Hardship, RMD, ERISA, litigation, closeout, coded denial, and underwriting appetite, referral, and price are probe or catalog results.
+The model reads and calls tools. Hardship, RMD, ERISA, litigation, closeout, coded denial, and underwriting appetite, referral, and price come from the playbook or the catalog.
 
 ## Governance (not on the runtime path)
 
@@ -154,7 +170,7 @@ Atlas is complementary catalog glue. It is not a triple store and not a SPARQL e
 - Agent-authored SQL, Ranger policies, or playbook rules
 - Per-label MCP tools (labels stay catalog keys)
 - Dual Atlas servers
-- Packing claims until a second live product must share one Studio/MCP install
+- Claim specialist prompt files under `packs/claims/agents/`
 
 ## Terms
 
@@ -175,12 +191,12 @@ Atlas is complementary catalog glue. It is not a triple store and not a SPARQL e
 | Probe | YAML `ASK`/`SELECT` or CEL on case JSON paths. First playbook match wins. |
 | Playbook | YAML that orders probes and names the action. Not an ops runbook. |
 | `next_step` | Action id the specialist should perform. |
-| `agent_role` | Playbook specialist id (audit JSON). Not the CrewAI Delegate string. |
-| `coworker` | Exact CrewAI Role for Orchestrator Delegate (playbook YAML). Omit if unmapped. |
+| `agent_role` | Playbook specialist id. The runtime loads `packs/<domain>/agents/<agent_role>.md`. |
+| `coworker` | Optional playbook label kept for the legacy Role string. The Mistral runtime selects the specialist from `agent_role`. |
 | `write` | Catalog write label; the specialist Goal owns the call. |
 | `lane` | Routing bucket (litigation, BI, closeout, …). |
 | `routing_reason` | One-sentence why this `next_step` (playbook copy, not LLM). |
-| `routing_summary` | Ready-to-paste block: next step, lane, why, checks. Studio Observation leads with this. |
+| `routing_summary` | In the chat envelope, an object with `next_step`, `agent_role`, `lane`, and `routing_reason`. The playbook also builds a plain-language string of the same facts. |
 | `checks` | Evaluated probes as title + status (`assigned` / `did_not_apply`) + detail. Later playbook checks are omitted with `later_checks_not_run`. |
 | `reason_probe_ids` | Probe ids evaluated this snapshot (audit / tests). Do not lead the chat with these. |
 | `allowed_tools` | Catalog labels or Studio tools the specialist may call. |
@@ -206,25 +222,24 @@ Atlas is complementary catalog glue. It is not a triple store and not a SPARQL e
 | `promote_audit_run` | No-op success on Impala (rows already on main). |
 | Routing signals / `get_claim_routing_signals` | Named query for extra facts the graph and probes need (flags, related ids). |
 
-**Studio / CrewAI**
+**Runtime / session**
 
 | Term | Meaning |
 |---|---|
-| `Intake Agent` | Exact CrewAI **Role** string required for Delegate to structured intake. Not Studio’s hierarchical Manager. |
-| Final Answer | CrewAI terminal reply. Orchestrator uses this when no coworker exists for a role. |
-| Configured in Agent Studio | Name / Role / Backstory / Goal (and tools table) set on the agent in Agent Studio. |
-| Workflow Data | Studio read-only tree: schema JSON, playbook, `pack.yaml`, exemplars. |
-| `UserParameters` | Studio tool config fields. Do not put lake credentials here. |
-| `WORKFLOW_DATA_DIRECTORY` | Env for the Workflow Data mount (`/workflow_data`). |
-| `SESSION_DIRECTORY` | Env for per-run artifacts (`/workspace`). |
-| Exemplars | Labeled NL snippets for cosine `pre_route_text`. |
-| `save_claim_letter` | Studio tool: write `claim_{id}_letter.txt` when the user asks, or `claim_{id}_sms.txt` on CollectIncidentReportNumber when `sms_written` is true. Does not send mail or SMS. |
+| `MISTRAL_LOCAL_URL` | Local inference base URL. Default `http://localhost:8000/v1`. |
+| `/api/v1/chat` | FastAPI chat route. Body is `user_text` and `pack_id`. Response is the four-node envelope. |
+| `/api/v1/action` | FastAPI tool route. Body is `pack_id`, `intent`, and `payload`. Skips the orchestrator and the playbook. |
+| Workflow Data | Read-only tree the legacy tools still accept: schema JSON, playbook, `pack.yaml`, exemplars. |
+| `WORKFLOW_DATA_DIRECTORY` | Env for that tree (`/workflow_data`). |
+| `SESSION_DIRECTORY` | Env for per-run artifacts (`/workspace` in the legacy mount). |
+| Exemplars | Labeled NL snippets shipped with a pack. |
+| `save_claim_letter` | Tool: write `claim_{id}_letter.txt`, or `claim_{id}_sms.txt` for an SMS `letter_type`. Does not send mail or SMS. |
 
 **Packs / demo**
 
 | Term | Meaning |
 |---|---|
-| Pack | Directory that swaps schema JSON, playbook, exemplars, and (for offline tests) fixtures. Studio tool names stay the same. |
+| Pack | `packs/<domain>` directory: ontology, playbook, catalog, agent prompts, and fixtures. |
 | `PACK_ROOT` | Host path on the **claims** MCP for rollover (and legacy) fixtures. Do not set on `iceberg-mcp-server-finserv` or `iceberg-mcp-server-underwriting`. |
 | `PACK_ID` | Rejected for the live distributions demo. Finserv MCP is a compiled catalog, not a fixture bake-in. |
 | Fixture | Canned JSON for a named query. Lake-shaped payload, not a routing rule. |
@@ -246,11 +261,11 @@ Atlas is complementary catalog glue. It is not a triple store and not a SPARQL e
 
 | Path | Role |
 |---|---|
-| `ontology/`, `playbook/` | Live claims schema JSON and router (402) |
+| `packs/claims/` | Claims schema, playbook, and catalog |
 | `ddl/hive_iceberg/` | Iceberg DDL (claims, audit, `litigation_task`, `pd_task`); claims seed includes **404** deny file (`car_insurance_claims_seed_404.sql` for already-loaded lakes) |
 | `docs/pd-path-demo.md` | Repeatable PD demo on claim 401 (Impala + Orchestrator) |
 | `docs/deny-path-demo.md` | Repeatable DENIED demo on claim 404 (impairment flip + Orchestrator) |
 | `mcp_forks/iceberg-mcp-server-claims/` | Impala MCP V7 + named catalog |
-| `agent_studio/src/ins_claims_agent/` | Shared build / validate / route / pack loader |
-| `agent_studio/studio_tools/` | Thin Studio tools + claims agents to configure in Agent Studio |
-| `packs/` | Finserv demo domains (same intake sequence) |
+| `src/` | Mistral runtime, FastAPI, `PackManager`, and the CEL graph and route package |
+| `packs/` | Domain packs (claims, distributions, rollovers, underwriting) |
+| `tests/test_phase5_shadow.py` | Playbook parity for seeds 401, 402, 403, 404, 88, and 7001 |
