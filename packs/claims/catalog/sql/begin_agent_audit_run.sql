@@ -1,0 +1,1 @@
+-- No Impala statement. Table-append mode writes later rows keyed by {run_id}.

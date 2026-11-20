@@ -1,7 +1,5 @@
-# Claims named catalog for the Studio tool run_named_catalog.
-# Upload this directory under Workflow Data so /workflow_data/catalog/catalog.yaml exists.
-# sql: one Impala statement in catalog/sql. handler: procedure in iceberg-mcp-server-claims.
-# MCP servers are unchanged. A label not listed here fails closed.
+# Claims named catalog. sql: a file of one or more Impala statements.
+# A label not listed here fails closed.
 version: 1
 database: car_insurance_claims
 
@@ -10,12 +8,12 @@ reads:
     required: [claim_id]
     optional: [database]
     summary: Claim spine for graph build
-    handler: get_claim_spine
+    sql: sql/get_claim_spine.sql
   get_claim_routing_signals:
     required: [claim_id]
     optional: [database]
     summary: Routing signals and insured-operator rows
-    handler: get_claim_routing_signals
+    sql: sql/get_claim_routing_signals.sql
   get_litigation_view:
     required: [claim_id]
     optional: [database]
@@ -25,12 +23,12 @@ reads:
     required: [claim_id]
     optional: [database]
     summary: Injury business columns
-    handler: get_bi_view
+    sql: sql/get_bi_view.sql
   get_subrogation_view:
     required: [claim_id]
     optional: [database]
     summary: Subrogation case business columns
-    handler: get_subrogation_view
+    sql: sql/get_subrogation_view.sql
   get_pd_view:
     required: [claim_id]
     optional: [database]
@@ -40,12 +38,12 @@ reads:
     required: [claim_id]
     optional: [database]
     summary: Operator, policy, and police facts for deny or citation review
-    handler: get_deny_view
+    sql: sql/get_deny_view.sql
   get_schema:
     required: []
     optional: [database]
     summary: List tables
-    handler: get_schema
+    sql: sql/get_schema.sql
   get_fnol_spine:
     required: [fnol_id]
     optional: [database]
@@ -56,7 +54,7 @@ reads:
     required: [fnol_id]
     optional: [database]
     summary: FNOL injury, third party, listed asset, peril, deductible
-    handler: get_fnol_routing_signals
+    sql: sql/get_fnol_routing_signals.sql
   list_adjuster_open_claims:
     required: [party_id]
     optional: [database]
@@ -69,69 +67,69 @@ writes:
     required: [run_id, event_json]
     optional: [database]
     summary: Insert one audit event
-    handler: write_audit_event
+    sql: sql/write_audit_event.sql
   append_agent_audit_event:
     required: [run_id, event_json]
     optional: [database]
     summary: Insert one audit event
-    handler: append_agent_audit_event
+    sql: sql/write_audit_event.sql
   append_agent_audit_evidence:
     required: [run_id, evidence_json]
     optional: [database]
     summary: Insert one audit evidence row
-    handler: append_agent_audit_evidence
+    sql: sql/append_agent_audit_evidence.sql
   begin_agent_audit_run:
     required: [run_id]
     optional: [database, source_branch]
     summary: Begin audit run (table-append mode)
-    handler: begin_agent_audit_run
+    sql: sql/begin_agent_audit_run.sql
   promote_audit_run:
     required: [run_id]
     optional: [database]
     summary: Promote audit run
-    handler: promote_audit_run
+    sql: sql/promote_audit_run.sql
   promote_agent_audit_run:
     required: [run_id]
     optional: [database]
     summary: Promote audit run
-    handler: promote_agent_audit_run
+    sql: sql/promote_audit_run.sql
   abandon_agent_audit_run:
     required: [run_id]
     optional: [database]
     summary: Delete audit rows for run_id
-    handler: abandon_agent_audit_run
+    sql: sql/abandon_agent_audit_run.sql
   create_litigation_task:
     required: [run_id, event_json]
     optional: [database]
     summary: Insert one litigation_task row
-    handler: create_litigation_task
+    sql: sql/create_litigation_task.sql
   create_pd_task:
     required: [run_id, event_json]
     optional: [database]
     summary: Insert one pd_task row and one audit receipt
-    handler: create_pd_task
+    sql: sql/create_pd_task.sql
   deny_claim:
     required: [run_id, event_json]
     optional: [database]
     summary: Set claim_status_code DENIED
-    handler: deny_claim
+    sql: sql/deny_claim.sql
   deny_fnol:
     required: [run_id, event_json]
     optional: [database]
     summary: Set fnol.triage_status_code DENIED
-    handler: deny_fnol
+    sql: sql/deny_fnol.sql
   close_fnol_incident_only:
     required: [run_id, event_json]
     optional: [database]
     summary: Set fnol.triage_status_code INCIDENT_ONLY
-    handler: close_fnol_incident_only
+    sql: sql/close_fnol_incident_only.sql
   convert_fnol_to_claim:
     required: [run_id, event_json]
     optional: [database]
     summary: Insert claim 80000+fnol_id, insured and adjuster roles, optional reserve
-    handler: convert_fnol_to_claim
+    sql: sql/convert_fnol_to_claim.sql
   review_fnol:
     required: [run_id, event_json]
     optional: [database]
     summary: Set fnol.triage_status_code ADJUSTER_REVIEW
-    handler: review_fnol
+    sql: sql/review_fnol.sql
