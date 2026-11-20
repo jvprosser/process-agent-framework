@@ -24,7 +24,7 @@ ollama run mistral:7b
 Navigate to the **Applications** tab in Cloudera AI and create a new Application.
 
 * **Subdomain:** `mistral-agent-ui`
-* **Script/Command:** `python src/main.py`
+* **Script:** `serve.py`
 * Launch the application. Once the status shows as running, click the application card to open the split-pane diagnostic harness in your browser.
 
 ---
