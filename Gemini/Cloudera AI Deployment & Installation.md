@@ -3,7 +3,14 @@
 **1. Project Initialization**
 Create a new Project in your Cloudera AI (formerly CML) workspace and clone the modernized repository containing the `src/` backend, `packs/` directories, and `ddl/` Iceberg schemas. Ensure your project has adequate compute resources allocated, particularly if you are spinning up a local LLM container within the same session.
 
-**2. Environment Configuration**
+**2. Python packages**
+Use a Python 3.12 runtime. `mistralai-agents` does not install on 3.11 or earlier. Cloudera installs the project-root `requirements.txt` when a new session or application engine starts. On a session that is already running:
+
+```bash
+pip install -r requirements.txt
+```
+
+**3. Environment Configuration**
 Configure the following environment variables in your Cloudera AI Project Settings to ensure the FastAPI loop and Mistral client bind correctly:
 
 * `CDSW_APP_PORT`: Set by Cloudera automatically (defaults to `8080`), used by FastAPI to serve the split-pane UI.
@@ -11,7 +18,7 @@ Configure the following environment variables in your Cloudera AI Project Settin
 * `SESSION_DIRECTORY`: Set to `/workspace` or a localized temp folder where the agent will materialize `claim_{id}_case.json` and artifact text files.
 * `IMPALA_HOST` / `IMPALA_PORT`: Required by the MCP V7 subprocess to execute the allow-listed queries.
 
-**3. Inference Server Boot (If Hosting Locally)**
+**4. Inference Server Boot (If Hosting Locally)**
 If you are not using a remote API, launch your local inference engine in a background terminal session before starting the application. For Ollama:
 
 ```bash
@@ -20,7 +27,7 @@ ollama run mistral:7b
 
 ```
 
-**4. Launch the Application**
+**5. Launch the Application**
 Navigate to the **Applications** tab in Cloudera AI and create a new Application.
 
 * **Subdomain:** `mistral-agent-ui`
