@@ -49,12 +49,33 @@ app.mount(
 
 def main() -> None:
     """Bind the UI on 127.0.0.1 and CDSW_APP_PORT (default 8080)."""
+    import asyncio
     import os
 
     import uvicorn
 
+    host = "127.0.0.1"
     port = int(os.getenv("CDSW_APP_PORT", "8080"))
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None and loop.is_running():
+        config = uvicorn.Config(app, host=host, port=port)
+        server = uvicorn.Server(config)
+        task = loop.create_task(server.serve())
+        task.add_done_callback(_report_server_task)
+        print(f"Serving on http://{host}:{port}")
+        return
+    uvicorn.run(app, host=host, port=port)
+
+
+def _report_server_task(task) -> None:
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        print(f"Server stopped: {error}")
 
 
 if __name__ == "__main__" and globals().get("__file__"):
