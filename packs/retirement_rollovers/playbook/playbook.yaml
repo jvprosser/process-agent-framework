@@ -31,7 +31,7 @@ probes:
     title: Rollover request exists in the case file
     when_true: Rollover request is present in the case file
     when_false: Rollover request is missing from the case file
-    cel: 'case_exists == true'
+    cel: 'entry_exists == true'
   R1.1:
     form: ASK
     title: Request closed

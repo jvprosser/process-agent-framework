@@ -32,21 +32,21 @@ def run_named_write(label: str, params: dict) -> dict:
 
 
 @tool
-def build_session_graph(entity_id: str) -> dict:
-    """Materialize the local session case JSON from the active pack ontology.
+def build_session_graph(entry_id: str) -> dict:
+    """Materialize the local session entry from the active pack ontology.
 
-    Spine and signal reads come from the allow-listed catalog. The case file
+    Spine and signal reads come from the allow-listed catalog. The entry file
     is the only instance document and is not written back to the lake.
     """
     global _session_entity_id, _session_case_path
 
     manager = PackManager.active()
-    entity = str(entity_id).strip()
+    entity = str(entry_id).strip()
     if not entity:
-        raise RuntimeError("entity_id is required")
+        raise RuntimeError("entry_id is required")
 
     if any(part in entity for part in ("/", "\\", "..")):
-        raise RuntimeError("entity_id is not a safe session name")
+        raise RuntimeError("entry_id is not a safe session name")
 
     spine_label = _graph_label(manager, "_spine", "session_spine")
     signals_label = _graph_label(manager, "_routing_signals", "session_signals")
@@ -60,7 +60,7 @@ def build_session_graph(entity_id: str) -> dict:
         "signals",
     )
 
-    from rules_engine.graph.case_json import build_case_graph
+    from rules_engine.graph.entry_json import build_entry_graph
     from rules_engine.pack import load_pack
     from rules_engine.studio_io import graph_artifact_path, write_json_artifact
 
@@ -69,28 +69,28 @@ def build_session_graph(entity_id: str) -> dict:
             f"Pack '{manager.pack_name}' is missing pack.yaml; "
             "the session graph is built from that manifest and the ontology"
         )
-    case = build_case_graph(
+    entry = build_entry_graph(
         entity,
         pack=load_pack(manager.root),
         spine=spine,
         signals=signals,
     )
-    _project_ontology_fields(case, manager.ontology_field_names())
+    _project_ontology_fields(entry, manager.ontology_field_names())
     path = graph_artifact_path(entity)
-    write_json_artifact(path, case)
+    write_json_artifact(path, entry)
     _session_entity_id = entity
     _session_case_path = path
     return {
         "entity_id": entity,
         "session_case": str(path.resolve()),
         "ontology_fields": manager.ontology_field_names(),
-        "field_count": len(case),
+        "field_count": len(entry),
     }
 
 
 @tool
 def evaluate_playbook() -> dict:
-    """Evaluate the active CEL playbook against the session case JSON.
+    """Evaluate the active CEL playbook against the session entry.
 
     The result's next_step, agent_role, and allowed_tools come only from
     the playbook. The model does not choose them.
@@ -98,18 +98,18 @@ def evaluate_playbook() -> dict:
     manager = PackManager.active()
     if _session_case_path is None or _session_entity_id is None:
         raise RuntimeError(
-            "No session case is materialized. Call build_session_graph first."
+            "No session entry is materialized. Call build_session_graph first."
         )
     if not _session_case_path.is_file():
-        raise RuntimeError(f"Session case JSON is missing: {_session_case_path}")
+        raise RuntimeError(f"Session entry JSON is missing: {_session_case_path}")
 
-    from rules_engine.graph.route_claim import route_claim
+    from rules_engine.graph.route_entry import route_entry
 
-    case = json.loads(_session_case_path.read_text(encoding="utf-8"))
-    if not isinstance(case, dict):
-        raise RuntimeError(f"Session case JSON must be an object: {_session_case_path}")
-    decision = route_claim(
-        case,
+    entry = json.loads(_session_case_path.read_text(encoding="utf-8"))
+    if not isinstance(entry, dict):
+        raise RuntimeError(f"Session entry JSON must be an object: {_session_case_path}")
+    decision = route_entry(
+        entry,
         _session_entity_id,
         playbook_path=manager.playbook_path,
     )
@@ -220,23 +220,23 @@ def _require_read(payload: dict[str, Any], label: str) -> dict[str, Any]:
     return payload
 
 
-def _project_ontology_fields(case: dict[str, Any], field_names: list[str]) -> None:
-    """Keep ontology-declared keys present on the session case."""
+def _project_ontology_fields(entry: dict[str, Any], field_names: list[str]) -> None:
+    """Keep ontology-declared keys present on the session entry."""
     for name in field_names:
-        case.setdefault(name, None)
+        entry.setdefault(name, None)
 
 
 _SMS_LETTER_TYPES = frozenset({"sms", "collectincidentreportnumber"})
 
 
 @tool
-def save_claim_letter(entity_id: str, letter_type: str = "letter") -> dict:
+def save_claim_letter(entry_id: str, letter_type: str = "letter") -> dict:
     """Write a drafted letter or SMS copy into the session directory. Does not send it."""
     from rules_engine.studio_io import session_dir, write_text_artifact
 
-    entity = str(entity_id).strip()
+    entity = str(entry_id).strip()
     if not entity or any(part in entity for part in ("/", "\\", "..")):
-        raise ValueError("entity_id is not a safe artifact name")
+        raise ValueError("entry_id is not a safe artifact name")
     kind = "sms" if _is_sms(letter_type) else "letter"
     filename = f"claim_{entity}_{kind}.txt"
     heading = "SMS draft" if kind == "sms" else "Letter draft"

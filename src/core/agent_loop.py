@@ -167,14 +167,14 @@ def _offer_intake(client: Mistral, entity_id: str) -> list[str]:
         {
             "role": "system",
             "content": (
-                "Call build_session_graph for the given entity id, then "
+                "Call build_session_graph for the given entry id, then "
                 "evaluate_playbook. Do not invent next_step, agent_role, "
                 "allowed_tools, or write."
             ),
         },
         {
             "role": "user",
-            "content": f"Prepare entity {entity_id} and evaluate the playbook.",
+            "content": f"Prepare entry {entity_id} and evaluate the playbook.",
         },
     ]
     try:

@@ -39,7 +39,7 @@ probes:
     title: Distribution request exists in the case file
     when_true: Distribution request is present in the case file
     when_false: Distribution request is missing from the case file
-    cel: 'case_exists == true'
+    cel: 'entry_exists == true'
   R1.1:
     form: ASK
     title: Request closed

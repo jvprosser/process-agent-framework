@@ -14,8 +14,9 @@ sys.path.insert(0, str(REPO / "src"))
 
 from core.pack_manager import PackManager
 from core import tools
-from rules_engine.graph.build_claim_graph import build_claim_graph
-from rules_engine.graph.route_claim import route_claim
+from rules_engine.graph.entry_json import build_entry_graph
+from rules_engine.graph.route_entry import route_entry
+from rules_engine.pack import load_pack
 from main import app
 
 PACKS = REPO / "packs"
@@ -35,6 +36,7 @@ _PARITY = (
 def _spine(**overrides: object) -> dict:
     row: dict = {
         "claim_id": 401,
+        "claim_exists": True,
         "claim_number": "CLM-2025-000401",
         "claim_status_code": "OPEN",
         "litigation_indicator": False,
@@ -129,9 +131,11 @@ def _fnol_signals() -> dict:
 
 
 def _claims_case(seed: str, snapshot: str) -> dict:
+    pack = load_pack(PACKS / "claims")
     if seed == "401" and snapshot == "police":
-        return build_claim_graph(
+        return build_entry_graph(
             401,
+            pack=pack,
             spine=_spine(),
             signals={
                 "has_police_report": False,
@@ -141,8 +145,9 @@ def _claims_case(seed: str, snapshot: str) -> dict:
             },
         )
     if seed == "401" and snapshot == "incident":
-        return build_claim_graph(
+        return build_entry_graph(
             401,
+            pack=pack,
             spine=_spine(),
             signals={
                 "has_police_report": False,
@@ -151,32 +156,36 @@ def _claims_case(seed: str, snapshot: str) -> dict:
             },
         )
     if seed == "402":
-        return build_claim_graph(
+        return build_entry_graph(
             402,
+            pack=pack,
             spine=_spine(claim_id=402, litigation_indicator=True),
             signals=_discovery(),
         )
     if seed == "403":
-        return build_claim_graph(
+        return build_entry_graph(
             403,
+            pack=pack,
             spine=_spine(claim_id=403, claim_status_code="CLOSED"),
             signals={},
         )
     if seed == "404" and snapshot == "unlawful":
-        return build_claim_graph(
+        return build_entry_graph(
             404,
+            pack=pack,
             spine=_spine(claim_id=404),
             signals={"insured_operators": [_operator(impairment_suspected_indicator=True)]},
         )
     if seed == "404" and snapshot == "denied":
-        return build_claim_graph(
+        return build_entry_graph(
             404,
+            pack=pack,
             spine=_spine(claim_id=404, claim_status_code="DENIED"),
             signals={"insured_operators": [_operator(was_cited_indicator=True)]},
         )
     if seed == "88":
-        return build_claim_graph(88, spine=_fnol_spine(), signals=_fnol_signals())
-    raise AssertionError(f"no claims case for {seed} {snapshot}")
+        return build_entry_graph(88, pack=pack, spine=_fnol_spine(), signals=_fnol_signals())
+    raise AssertionError(f"no claims entry for {seed} {snapshot}")
 
 
 def _mount_claims() -> PackManager:
@@ -205,7 +214,7 @@ def _distribution(monkeypatch, entity: str) -> tuple[dict, dict]:
     tools.build_session_graph(entity)
     decision = tools.evaluate_playbook()
     case = json.loads(Path(tools._session_case_path).read_text(encoding="utf-8"))
-    legacy = route_claim(
+    legacy = route_entry(
         case,
         entity,
         playbook_path=PackManager.active().playbook_path,
@@ -234,7 +243,7 @@ def test_playbook_matches_legacy_seed(seed, snapshot, expected, monkeypatch, tmp
         _mount_claims()
         case = _claims_case(seed, snapshot)
         decision = _evaluate(seed, case)
-        legacy = route_claim(
+        legacy = route_entry(
             case,
             seed,
             playbook_path=PackManager.active().playbook_path,
@@ -251,7 +260,7 @@ def test_action_writes_claim_letter(monkeypatch, tmp_path):
         json={
             "pack_id": "underwriting",
             "intent": "save_claim_letter",
-            "payload": {"entity_id": "401"},
+            "payload": {"entry_id": "401"},
         },
     )
     assert response.status_code == 200
@@ -269,7 +278,7 @@ def test_action_writes_sms_for_incident_step(monkeypatch, tmp_path):
             "pack_id": "underwriting",
             "intent": "save_claim_letter",
             "payload": {
-                "entity_id": "401",
+                "entry_id": "401",
                 "letter_type": "CollectIncidentReportNumber",
             },
         },

@@ -103,7 +103,7 @@ def test_view_label_and_letter_actions(monkeypatch):
         {
             "label": "Draft Recommended Letter",
             "intent": "save_claim_letter",
-            "payload": {"entity_id": "401"},
+            "payload": {"entry_id": "401"},
         }
     ]
 

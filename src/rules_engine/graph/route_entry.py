@@ -15,18 +15,18 @@ _LATER_NOTE = "Later playbook checks were not run."
 _DEFAULT_TITLE = "No earlier check assigned work"
 
 
-def route_claim(
-    case: dict[str, Any],
-    claim_id: int | str,
+def route_entry(
+    entry: dict[str, Any],
+    entry_id: int | str,
     *,
     playbook_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Run playbook probes in priority order; return next step / agent / tools."""
-    if not isinstance(case, dict):
-        raise TypeError("route_claim expects a case JSON dict")
+    if not isinstance(entry, dict):
+        raise TypeError("route_entry expects an entry JSON dict")
     playbook = _load_playbook(playbook_path)
     if playbook.get("exception_probes"):
-        return _route_with_exceptions(case, claim_id, playbook)
+        return _route_with_exceptions(entry, entry_id, playbook)
     priorities = list(playbook.get("priorities") or [])
     probes = playbook.get("probes") or {}
     matched: list[dict[str, Any]] = []
@@ -35,13 +35,13 @@ def route_claim(
         form = str(probe_cfg.get("form") or "ASK").upper()
         if str(probe_cfg.get("cel") or "").strip():
             form = "ASK"
-        result = _exec_probe(case, probe_cfg, form)
+        result = _exec_probe(entry, probe_cfg, form)
         action = _match_action(playbook, probe_id, form, result)
         assigned = action is not None
         matched.append(_trace_entry(probe_id, probe_cfg, form, result, assigned))
         if action is not None:
             return _decision(
-                claim_id,
+                entry_id,
                 action,
                 matched,
                 remaining=priorities[idx + 1 :],
@@ -51,19 +51,19 @@ def route_claim(
 
     default = playbook.get("default_action", {})
     return _decision(
-        claim_id,
+        entry_id,
         default,
         matched,
         remaining=[],
         terminal=bool(default.get("terminal", True)),
         playbook_version=_playbook_version(playbook),
-        reason_text=_default_disposition_reason(case),
+        reason_text=_default_disposition_reason(entry),
     )
 
 
 def _route_with_exceptions(
-    case: dict[str, Any],
-    claim_id: int | str,
+    entry: dict[str, Any],
+    entry_id: int | str,
     playbook: dict[str, Any],
 ) -> dict[str, Any]:
     """Score every exception probe, then first-match the disposition."""
@@ -79,19 +79,19 @@ def _route_with_exceptions(
         form = str(probe_cfg.get("form") or "ASK").upper()
         if str(probe_cfg.get("cel") or "").strip():
             form = "ASK"
-        result = _exec_probe(case, probe_cfg, form)
+        result = _exec_probe(entry, probe_cfg, form)
         action = _match_action(playbook, probe_id, form, result)
-        entry = _trace_entry(probe_id, probe_cfg, form, result, action is not None)
-        trace.append(entry)
+        probe = _trace_entry(probe_id, probe_cfg, form, result, action is not None)
+        trace.append(probe)
         if probe_id in exception_ids:
             if action is not None:
-                found.append(_exception_item(case, probe_id, probe_cfg, action, entry))
+                found.append(_exception_item(entry, probe_id, probe_cfg, action, probe))
             continue
         if action is None:
             continue
         if found:
             return _exception_decision(
-                claim_id,
+                entry_id,
                 playbook,
                 trace,
                 found,
@@ -100,7 +100,7 @@ def _route_with_exceptions(
                 playbook_version=version,
             )
         return _decision(
-            claim_id,
+            entry_id,
             action,
             trace,
             remaining=priorities[idx + 1 :],
@@ -111,51 +111,51 @@ def _route_with_exceptions(
     default = playbook.get("default_action", {})
     if found:
         return _exception_decision(
-            claim_id,
+            entry_id,
             playbook,
             trace,
             found,
             default,
             remaining=[],
             playbook_version=version,
-            case=case,
+            entry=entry,
         )
     return _decision(
-        claim_id,
+        entry_id,
         default,
         trace,
         remaining=[],
         terminal=bool(default.get("terminal", True)),
         playbook_version=version,
-        reason_text=_default_disposition_reason(case),
+        reason_text=_default_disposition_reason(entry),
     )
 
 
 def _exception_item(
-    case: dict[str, Any],
+    entry: dict[str, Any],
     probe_id: str,
     probe_cfg: dict[str, Any],
     action: dict[str, Any],
-    entry: dict[str, Any],
+    probe: dict[str, Any],
 ) -> dict[str, Any]:
     item = {
         "probe_id": probe_id,
         "next_step": action.get("step"),
-        "detail": entry["detail"],
+        "detail": probe["detail"],
     }
-    if entry.get("cel"):
-        item["cel"] = entry["cel"]
+    if probe.get("cel"):
+        item["cel"] = probe["cel"]
     fields = {}
     for key in probe_cfg.get("detail_fields") or []:
-        if key in case:
-            fields[str(key)] = case[key]
+        if key in entry:
+            fields[str(key)] = entry[key]
     if fields:
         item["fields"] = fields
     return item
 
 
 def _exception_decision(
-    claim_id: int | str,
+    entry_id: int | str,
     playbook: dict[str, Any],
     probe_trace: list[dict[str, Any]],
     found: list[dict[str, Any]],
@@ -163,11 +163,11 @@ def _exception_decision(
     *,
     remaining: list[str],
     playbook_version: str | None,
-    case: dict[str, Any] | None = None,
+    entry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     review = playbook.get("exception_review") or {}
     decision = _decision(
-        claim_id,
+        entry_id,
         review,
         probe_trace,
         remaining=remaining,
@@ -193,57 +193,16 @@ def _exception_decision(
     decision["routing_reason"] = f"{details} → {step}."
     note = f"Disposition if these exceptions are cleared: {disposition['next_step']}."
     default_step = (playbook.get("default_action") or {}).get("step")
-    if case is not None and disposition["next_step"] == default_step:
-        note = f"{note} {_default_disposition_reason(case)}"
+    if entry is not None and disposition["next_step"] == default_step:
+        note = f"{note} {_default_disposition_reason(entry)}"
     decision["disposition_note"] = note
     decision["routing_summary"] = format_routing_summary(decision)
     return decision
 
 
-def _default_disposition_reason(case: dict[str, Any]) -> str:
-    """Why straight-through bind missed, using the values on this case."""
-    rule = (
-        "Straight-through bind needs total insured value at or under 5000000, "
-        "zero claims in 36 months, a financial score of at least 680, and a "
-        "flood zone other than A or V."
-    )
-    gaps: list[str] = []
-    tiv = _as_float(case.get("total_insured_value"))
-    if tiv is not None and tiv > 5_000_000:
-        gaps.append(f"total insured value {_num(tiv)}")
-    claims = _as_float(case.get("claims_count_36m"))
-    if claims is None:
-        gaps.append("claims in 36 months missing")
-    elif claims != 0:
-        label = "claim" if claims == 1 else "claims"
-        gaps.append(f"{_num(claims)} {label} in 36 months")
-    score = case.get("financial_score")
-    score_n = None if score in (None, "") else _as_float(score)
-    if score_n is None:
-        gaps.append("no financial score")
-    elif score_n < 680:
-        gaps.append(f"financial score {_num(score_n)}")
-    zone = str(case.get("flood_zone") or "").strip()
-    if zone in {"A", "V"}:
-        gaps.append(f"flood zone {zone}")
-    if not gaps:
-        return "No decline, referral, or straight-through bind check matched."
-    return f"{rule} This file has {'; '.join(gaps)}."
-
-
-def _as_float(value: Any) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _num(value: float) -> str:
-    if value.is_integer():
-        return str(int(value))
-    return str(value)
+def _default_disposition_reason(_entry: dict[str, Any]) -> str:
+    """Generic fallback when no probe assigns the entry."""
+    return "No probes matched the entry state."
 
 
 def _playbook_version(playbook: dict[str, Any]) -> str | None:
@@ -260,15 +219,15 @@ def _load_playbook(playbook_path: str | Path | None) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def _exec_probe(case: dict[str, Any], probe_cfg: dict[str, Any], form: str) -> Any:
+def _exec_probe(entry: dict[str, Any], probe_cfg: dict[str, Any], form: str) -> Any:
     cel = probe_cfg.get("cel")
     if cel is not None and str(cel).strip():
-        return eval_cel(str(cel), case)
+        return eval_cel(str(cel), entry)
     if form == "ASK":
-        return eval_match(probe_cfg.get("match") or {}, case)
+        return eval_match(probe_cfg.get("match") or {}, entry)
     if form == "SELECT":
-        path = probe_cfg.get("path") or "claim_status_code"
-        value = get_path(case, str(path))
+        path = probe_cfg.get("path") or ""
+        value = get_path(entry, str(path))
         return [] if value is None else [{"value": value}]
     raise ValueError(f"Unsupported probe form: {form}")
 
@@ -351,7 +310,7 @@ def _optional_str(action: dict[str, Any], *keys: str) -> str | None:
 
 
 def _decision(
-    claim_id: int | str,
+    entry_id: int | str,
     action: dict[str, Any],
     probe_trace: list[dict[str, Any]],
     *,
@@ -387,7 +346,7 @@ def _decision(
         for p in probe_trace
     ]
     decision = {
-        "claim_id": str(claim_id),
+        "entry_id": str(entry_id),
         "lane": action.get("lane"),
         "next_step": step,
         "agent_role": action.get("agent"),

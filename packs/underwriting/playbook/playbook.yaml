@@ -68,7 +68,7 @@ probes:
     title: Submission exists in the case file
     when_true: Submission is present in the case file
     when_false: Submission is missing from the case file
-    cel: 'case_exists == true'
+    cel: 'entry_exists == true'
   P0C_LOW_OCR_CONFIDENCE:
     form: ASK
     title: Scanned ACORD word confidence below the review line

@@ -1,4 +1,4 @@
-"""Evaluate playbook CEL expressions against a case JSON document."""
+"""Evaluate playbook CEL expressions against an entry document."""
 
 from __future__ import annotations
 
@@ -110,10 +110,10 @@ _BOOL_KEYS = (
 )
 
 
-def flatten_case(case: dict[str, Any]) -> dict[str, Any]:
+def flatten_entry(entry: dict[str, Any]) -> dict[str, Any]:
     """Lift nested signals onto the root the same way YAML get_path did."""
-    out = {k: v for k, v in case.items() if k != "signals"}
-    nested = case.get("signals")
+    out = {k: v for k, v in entry.items() if k != "signals"}
+    nested = entry.get("signals")
     if isinstance(nested, dict):
         inner = nested.get("signals") if isinstance(nested.get("signals"), dict) else nested
         if isinstance(inner, dict):
@@ -168,9 +168,9 @@ def compile_cel(expr: str) -> Any:
     return program
 
 
-def eval_cel(expr: str, case: dict[str, Any]) -> bool:
-    """Return True when the CEL expression is true on the flattened case JSON."""
+def eval_cel(expr: str, entry: dict[str, Any]) -> bool:
+    """Return True when the CEL expression is true on the flattened entry."""
     program = compile_cel(expr)
-    activation = json_to_cel(flatten_case(case))
+    activation = json_to_cel(flatten_entry(entry))
     result = program.evaluate(activation)
     return bool(result)

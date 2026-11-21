@@ -3,7 +3,7 @@
   "label": "Retirement rollover request case JSON",
   "case_class": "RolloverRequest",
   "fields": {
-    "case_exists": { "type": "boolean" },
+    "entry_exists": { "type": "boolean" },
     "request_status_code": { "type": "string" },
     "rollover_type_code": { "type": "string" },
     "plan_id": { "type": "string" },

@@ -3,7 +3,7 @@
   "label": "Retirement distribution request case JSON",
   "case_class": "DistributionRequest",
   "fields": {
-    "case_exists": { "type": "boolean" },
+    "entry_exists": { "type": "boolean" },
     "request_status_code": { "type": "string" },
     "distribution_type_code": { "type": "string" },
     "plan_id": { "type": "string" },

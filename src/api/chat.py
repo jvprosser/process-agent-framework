@@ -90,7 +90,7 @@ def _actions(route: dict[str, Any] | None, entity_id: str | None) -> Actions:
             {
                 "label": "Draft Recommended Letter",
                 "intent": "save_claim_letter",
-                "payload": {"entity_id": entity_id},
+                "payload": {"entry_id": entity_id},
             }
         ],
     )

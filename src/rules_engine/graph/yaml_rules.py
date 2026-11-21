@@ -1,4 +1,4 @@
-"""Evaluate playbook YAML match clauses against a case JSON document."""
+"""Evaluate playbook YAML match clauses against an entry document."""
 
 from __future__ import annotations
 
@@ -33,23 +33,23 @@ def get_path(doc: dict[str, Any], path: str | None) -> Any:
     return cur
 
 
-def eval_match(match: dict[str, Any] | None, case: dict[str, Any]) -> bool:
+def eval_match(match: dict[str, Any] | None, entry: dict[str, Any]) -> bool:
     if not match:
         return False
     if "all" in match:
-        return all(eval_match(item, case) for item in match["all"])
+        return all(eval_match(item, entry) for item in match["all"])
     if "any" in match:
-        return any(eval_match(item, case) for item in match["any"])
+        return any(eval_match(item, entry) for item in match["any"])
     if "not" in match:
         inner = match["not"]
         if isinstance(inner, dict):
-            return not eval_match(inner, case)
+            return not eval_match(inner, entry)
         return not bool(inner)
-    return eval_pred(match, case)
+    return eval_pred(match, entry)
 
 
-def eval_pred(pred: dict[str, Any], case: dict[str, Any]) -> bool:
-    value = get_path(case, pred.get("path"))
+def eval_pred(pred: dict[str, Any], entry: dict[str, Any]) -> bool:
+    value = get_path(entry, pred.get("path"))
     if "equals" in pred:
         return _equals(value, pred["equals"])
     if "exists" in pred:

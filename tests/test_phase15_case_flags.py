@@ -1,4 +1,4 @@
-"""Phase 15: a populated spine row sets claim_exists so R0.1 can pass."""
+"""Phase 15/16: a populated spine row sets entry_exists."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from rules_engine.graph.case_json import build_pack_case
+from rules_engine.graph.entry_json import build_entry_graph
 from rules_engine.pack import load_pack
 
 PACKS = REPO / "packs"
 
 
-def test_spine_row_sets_claim_exists_and_triangle():
+def test_spine_row_sets_entry_exists_and_triangle():
     pack = load_pack(PACKS / "claims")
-    case = build_pack_case(
+    entry = build_entry_graph(
         "401",
         pack=pack,
         spine={
@@ -31,17 +31,19 @@ def test_spine_row_sets_claim_exists_and_triangle():
         signals={"has_police_report": False},
     )
 
-    assert case["claim_exists"] is True
-    assert case["fnol_exists"] is False
-    assert case["triangle"] is True
-    assert case["has_adjuster"] is True
-    assert case["eval_date"]
+    assert entry["entry_id"] == "401"
+    assert entry["entry_exists"] is True
+    assert entry["triangle"] is True
+    assert entry["has_adjuster"] is True
+    assert entry["eval_date"]
+    assert "claim_exists" not in entry
+    assert "fnol_exists" not in entry
 
 
-def test_empty_spine_does_not_invent_a_claim():
+def test_empty_spine_does_not_invent_an_entry():
     pack = load_pack(PACKS / "claims")
-    case = build_pack_case("401", pack=pack, spine={}, signals={})
+    entry = build_entry_graph("401", pack=pack, spine={}, signals={})
 
-    assert case["claim_id"] == "401"
-    assert case["claim_exists"] is False
-    assert case["triangle"] is False
+    assert entry["entry_id"] == "401"
+    assert entry["entry_exists"] is False
+    assert entry["triangle"] is False

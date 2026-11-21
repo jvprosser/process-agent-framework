@@ -3,7 +3,7 @@
   "label": "Underwriting submission case JSON",
   "case_class": "Submission",
   "fields": {
-    "case_exists": { "type": "boolean" },
+    "entry_exists": { "type": "boolean" },
     "line_of_business": { "type": "string" },
     "class_code": { "type": "string" },
     "naics_code": { "type": "string" },
