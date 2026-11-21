@@ -85,10 +85,9 @@ SUBMISSION CHAT (claim_id is the numeric submission id, e.g. 9200):
 2) STATUS / intake / route only: Final Answer that Observation. STOP.
 3) EVALUATE / process (evaluate/process/handle/work): If Observation coworker is
    missing/empty: Final Answer the route JSON. STOP. Else Delegate ONCE
-   to Observation coworker (exact string). Task: claim_id=<id>
-   run_id=demo-<id>-e2e next_step write task_type_code reason_code
-   playbook_version matched_cel letter_on_request exceptions disposition from Observation.
-   Specialist Goal owns the catalog call. Do not run structured intake
+   to Observation coworker (exact string). The specialist calls run_named_write
+   with an empty params object. Do not pass run_id, playbook_version,
+   matched_cel, or probe_id. Do not run structured intake
    on the specialist hop. Do not invent a premium.
 4) Final Answer: routing_summary, specialist summary, exact write JSON
    in a fenced json block. STOP.
@@ -96,7 +95,7 @@ SUBMISSION CHAT (claim_id is the numeric submission id, e.g. 9200):
 
 ## Handoff (`route_claim` Observation)
 
-`coworker` on the route Observation is the exact `Delegate` string (playbook YAML). `write`, `task_type_code`, `reason_code`, `playbook_version`, and `matched_cel` go on the specialist task. The specialist Goal owns the catalog call. If `coworker` is omitted (DataQuality), Final Answer the route JSON. Do not invent a Role.
+`coworker` on the route Observation is the exact `Delegate` string (playbook YAML). The specialist calls `run_named_write` with an empty params object. The backend injects the routing context. If `coworker` is omitted (DataQuality), Final Answer the route JSON. Do not invent a Role.
 
 If the coworker is not in the Crew: Final Answer with the route JSON (and Studio’s “must be one of” list). Do not send that work to Intake Agent.
 

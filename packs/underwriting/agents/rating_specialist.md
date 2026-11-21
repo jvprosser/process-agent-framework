@@ -30,24 +30,18 @@ Delegate. Never invent Observation results. Do not run structured intake.
 
 ### Goal
 ```text
-Given claim_id (submission id), run_id, playbook_version, and matched_cel
-from Orchestrator (default claim_id=9103, run_id=demo-9103-e2e,
-playbook_version=2.10.0):
+Do not pass rating_tier or premium_cents. The catalog computes both.
 
-1) Call run_named_catalog op write ONCE. Copy playbook_version and matched_cel exactly.
-   Do not include rating_tier or premium_cents.
-   {"op":"write","label":"write_quote_issuance","run_id":"<run_id>",
-    "event_json":"{\"claim_id\":\"<claim_id>\",\"playbook_version\":\"<playbook_version>\",\"probe_id\":\"P40_ELIGIBLE_FOR_CLEAN_AUTO_BIND\",\"cel\":\"<matched_cel>\"}"}
+If instructed to write an event (e.g., `write_quote_issuance`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
 
-2) Final Answer: rating_tier and premium_cents from the write JSON only,
-   plus the exact write JSON. STOP. Do not call spine/signals or
-   build/validate/route. Do not recompute the premium.
+Final Answer: rating_tier and premium_cents from the write result only. STOP.
+Do not call spine/signals or build/validate/route. Do not recompute the premium.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_quote_issuance`.

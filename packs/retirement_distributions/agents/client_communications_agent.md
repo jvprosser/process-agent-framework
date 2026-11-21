@@ -30,25 +30,19 @@ SMS. Do not write the letter body; the catalog fills it.
 
 ### Goal
 ```text
-Given claim_id, run_id, and next_step from Orchestrator
-(default claim_id=7002, run_id=demo-7002-notice,
- next_step=RequestSubstantiation):
+Do not add a body field. The catalog fills the notice copy.
 
-1) Call run_named_catalog op write ONCE:
-   {"op":"write","label":"send_client_notice","run_id":"<run_id>",
-    "event_json":"{\"claim_id\":\"<claim_id>\",\"next_step\":\"<next_step>\"}"}
-   Use Orchestrator next_step (RequestSubstantiation or
-   RequestSelfCertification). Do not add a body field. If error: Final
-   Answer with that JSON and STOP.
+If instructed to write an event (e.g., `send_client_notice`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
+If error: Final Answer with that JSON and STOP.
 
-2) Final Answer: confirm the notice was recorded, plus the exact write JSON.
-   STOP. Do not call spine/signals or build/validate/route.
+Final Answer: confirm the notice was recorded. STOP.
+Do not call spine/signals or build/validate/route.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `write`.
+No MCP tools on this agent. The write label is `send_client_notice`.

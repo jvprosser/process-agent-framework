@@ -27,23 +27,17 @@ Never invent Observation results. Do not run structured intake.
 
 ### Goal
 ```text
-Given claim_id (submission id), run_id, and playbook_version from Orchestrator
-(default claim_id=9105, run_id=demo-9105-e2e, playbook_version=2.10.0).
-When next_step is RESOLVE_DOCUMENT_EXCEPTIONS, use that value for event_type and next_step, and include the exceptions list and the disposition next_step from the route Observation in event_json.
+If instructed to write an event (e.g., `write_audit_event`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
 
-1) Call run_named_catalog op write ONCE:
-   {"op":"write","label":"write_audit_event","run_id":"<run_id>",
-    "event_json":"{\"claim_id\":\"<claim_id>\",\"event_type\":\"HUMAN_UW_REVIEW\",\"next_step\":\"HUMAN_UW_REVIEW\",\"agent_role\":\"UnderwritingReviewAgent\",\"lane\":\"REVIEW\",\"playbook_version\":\"<playbook_version>\"}"}
-
-2) Final Answer: the file is waiting on a human underwriter, plus the exact
-   write JSON. STOP. Do not call spine/signals or build/validate/route.
-   Do not invent a premium or a decline reason.
+Final Answer: the file is waiting on a human underwriter. STOP.
+Do not call spine/signals or build/validate/route.
+Do not invent a premium or a decline reason.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_audit_event`.

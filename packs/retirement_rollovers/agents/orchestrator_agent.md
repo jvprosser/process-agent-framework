@@ -76,9 +76,9 @@ CLAIM_ID CHAT:
 2) STATUS / intake / route only: Final Answer that Observation. STOP.
 3) PROCESS (process/handle/work/complete): If Observation coworker is
    missing/empty: Final Answer the route JSON. STOP. Else Delegate ONCE
-   to Observation coworker (exact string). Task: claim_id=<id>
-   run_id=demo-<id>-e2e next_step write task_type_code from Observation.
-   Specialist Goal owns the catalog call. Do not run structured intake
+   to Observation coworker (exact string). The specialist calls run_named_write
+   with an empty params object. Do not pass run_id or probe_id.
+   Do not run structured intake
    on the specialist hop.
 4) Final Answer: routing_summary, specialist summary, exact write JSON
    in a fenced json block. STOP.
@@ -86,7 +86,7 @@ CLAIM_ID CHAT:
 
 ## Handoff (`route_claim` Observation)
 
-`coworker` on the route Observation is the exact `Delegate` string (playbook YAML). `write` / `task_type_code` go on the specialist task; the specialist Goal owns the catalog call. If `coworker` is omitted (DataQuality), Final Answer the route JSON. Do not invent a Role.
+`coworker` on the route Observation is the exact `Delegate` string (playbook YAML). The specialist calls `run_named_write` with an empty params object. The backend injects the routing context. If `coworker` is omitted (DataQuality), Final Answer the route JSON. Do not invent a Role.
 
 If the coworker is not in the Crew: Final Answer with the route JSON (and Studio’s “must be one of” list). Do not send that work to Intake Agent.
 
@@ -101,7 +101,7 @@ Studio Plan/Evaluator: a `process claim <id>` plan is at most Intake Agent intak
 
 ## User chats (Orchestrator)
 
-Paste these as the handler would type them. Goal cites Observation coworker / write; `run_id` is `demo-<id>-e2e`. Do not put catalog labels, `run_id`, or `next_step` in the chat.
+Paste these as the handler would type them. Goal cites Observation coworker / write. Do not put catalog labels, `run_id`, or `next_step` in the chat.
 
 ERISA review:
 

@@ -30,23 +30,18 @@ Never Delegate. Never invent Observation results. Do not run structured intake.
 
 ### Goal
 ```text
-Given claim_id (submission id), run_id, playbook_version, and matched_cel
-from Orchestrator (default claim_id=9104, run_id=demo-9104-e2e,
-playbook_version=2.10.0). provider_type is INSPECTION.
+provider_type is INSPECTION. Do not order a different data vendor.
 
-1) Call run_named_catalog op write ONCE. Copy playbook_version and matched_cel exactly.
-   {"op":"write","label":"write_data_enrichment_request","run_id":"<run_id>",
-    "event_json":"{\"claim_id\":\"<claim_id>\",\"provider_type\":\"INSPECTION\",\"playbook_version\":\"<playbook_version>\",\"probe_id\":\"P1_AWAITING_INSPECTION\",\"cel\":\"<matched_cel>\"}"}
+If instructed to write an event (e.g., `write_data_enrichment_request`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
 
-2) Final Answer: confirm the inspection request was recorded, plus the exact
-   write JSON. STOP. Do not call spine/signals or build/validate/route.
-   Do not invent a premium.
+Final Answer: confirm the inspection request was recorded. STOP.
+Do not call spine/signals or build/validate/route. Do not invent a premium.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_data_enrichment_request`.

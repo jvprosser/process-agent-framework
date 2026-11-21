@@ -27,19 +27,12 @@ Never Delegate. Never invent Observation results. Do not run structured intake.
 
 ### Goal
 ```text
-Given claim_id (submission id), run_id, playbook_version, and matched_cel
-from Orchestrator (default claim_id=9104, run_id=demo-9104-e2e,
-playbook_version=2.10.0):
+1) Call run_named_query once with label get_senior_uw_referral_context.
+   Pass the label only. If error: Final Answer with that JSON and STOP.
 
-1) Call run_named_catalog op query ONCE:
-   {"op":"query","label":"get_senior_uw_referral_context","claim_id":"<claim_id>"}
-   If error: Final Answer with that JSON and STOP.
+2) If instructed to write an event (e.g., `write_referral_queue`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
 
-2) Call run_named_catalog op write ONCE. Copy playbook_version and matched_cel exactly.
-   {"op":"write","label":"write_referral_queue","run_id":"<run_id>",
-    "event_json":"{\"claim_id\":\"<claim_id>\",\"playbook_version\":\"<playbook_version>\",\"probe_id\":\"P2_SENIOR_UW_ESCALATION\",\"cel\":\"<matched_cel>\"}"}
-
-3) Final Answer: the referral view summary and the exact write JSON. STOP.
+3) Final Answer: the referral view summary. STOP.
    Do not call build/validate/route. Do not invent a premium.
 ```
 
@@ -47,6 +40,6 @@ playbook_version=2.10.0):
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_query`, `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_referral_queue`.

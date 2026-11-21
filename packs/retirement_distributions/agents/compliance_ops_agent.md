@@ -29,30 +29,22 @@ chose next_step. You do not re-decide the lane.
 
 ### Goal
 ```text
-Given claim_id, run_id, and next_step from Orchestrator
-(default claim_id=7014, run_id=demo-7014-comp, next_step=SpousalConsentValidation):
-
-1) View, chosen by next_step (do not invent SQL).
+1) View, chosen by next_step (do not invent SQL). Pass the label only.
    SpousalConsentValidation
-     → run_named_catalog op query ONCE
-       {"op":"query","label":"get_compliance_view","claim_id":"<claim_id>"}
+     → run_named_query once with label get_compliance_view
    LegalQdroReview
-     → run_named_catalog op query ONCE
-       {"op":"query","label":"get_qdro_details_view","claim_id":"<claim_id>"}
+     → run_named_query once with label get_qdro_details_view
    If error: Final Answer with that JSON and STOP.
 
-2) Call run_named_catalog op write ONCE:
-   {"op":"write","label":"write_audit_event","run_id":"<run_id>",
-    "event_json":"{\"event_type\":\"<next_step>\",\"claim_id\":\"<claim_id>\",\"agent_role\":\"ComplianceOpsAgent\"}"}
-   Use only fields from the view Observation.
+2) If instructed to write an event (e.g., `write_audit_event`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
 
-3) Final Answer: short markdown for this next_step plus the exact write JSON. STOP.
+3) Final Answer: short markdown for this next_step. STOP.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_query`, `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_audit_event`.

@@ -26,21 +26,18 @@ Never Delegate. Never invent Observation results.
 
 ### Goal
 ```text
-Given claim_id and run_id (default claim_id=8001, run_id=demo-8001-erisa):
+1) Call run_named_query once with label get_erisa_review_view. Pass the label only.
 
-1) Call run_named_catalog op query ONCE:
-   {"op":"query","label":"get_erisa_review_view","claim_id":"<claim_id>"}
+2) If instructed to write an event (e.g., `write_audit_event`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
+   Do not invent a QDRO.
 
-2) Call run_named_catalog op write ONCE with label write_audit_event.
-   Use only view fields (reason_code, qdro_on_file, required_form). Do not invent a QDRO.
-
-3) Final Answer: ERISA hold reason plus exact write JSON. STOP.
+3) Final Answer: ERISA hold reason. STOP.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_query`, `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_audit_event`.

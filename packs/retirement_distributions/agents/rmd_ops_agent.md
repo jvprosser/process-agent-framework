@@ -26,21 +26,18 @@ Never Delegate. Never invent Observation results.
 
 ### Goal
 ```text
-Given claim_id and run_id (default claim_id=7003, run_id=demo-7003-rmd):
+1) Call run_named_query once with label get_rmd_view. Pass the label only.
 
-1) Call run_named_catalog op query ONCE:
-   {"op":"query","label":"get_rmd_view","claim_id":"<claim_id>"}
+2) If instructed to write an event (e.g., `write_audit_event`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
+   Do not invent amounts.
 
-2) Call run_named_catalog op write ONCE with label write_audit_event. Use only view fields
-   (required_amount, paid_amount, shortfall_amount). Do not invent amounts.
-
-3) Final Answer: shortfall summary plus exact write JSON. STOP.
+3) Final Answer: shortfall summary. STOP.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_query`, `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `query` or `write`.
+No MCP tools on this agent. The write label is `write_audit_event`.

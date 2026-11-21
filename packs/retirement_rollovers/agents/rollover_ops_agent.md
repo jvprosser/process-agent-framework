@@ -25,19 +25,15 @@ Never invent SQL. Never Delegate. Never invent Observation results.
 
 ### Goal
 ```text
-Given claim_id and run_id (default claim_id=8002, run_id=demo-8002-ops):
+If instructed to write an event (e.g., `write_audit_event`), call the `run_named_write` tool and pass an empty `{}` for the params. The backend orchestrator will automatically inject the routing context.
 
-1) Call run_named_catalog op write ONCE:
-   {"op":"write","label":"write_audit_event","run_id":"<run_id>",
-    "event_json":"{\"event_type\":\"ProcessRollover\",\"claim_id\":\"<claim_id>\",\"agent_role\":\"RolloverOpsAgent\"}"}
-
-2) Final Answer: confirm the direct rollover is cleared to process, plus the exact write JSON. STOP.
+Final Answer: confirm the direct rollover is cleared to process. STOP.
 ```
 
 ## Tools
 
 | Kind | Tool |
 |---|---|
-| Studio | `run_named_catalog` |
+| Studio | `run_named_write` |
 
-No MCP tools on this agent. `run_named_catalog` `op` is `write`.
+No MCP tools on this agent. The write label is `write_audit_event`.
