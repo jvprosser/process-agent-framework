@@ -263,7 +263,63 @@ def build_pack_case(
     case["spine"] = spine
     case["signals"] = signals
     case.update({k: v for k, v in merged.items() if k not in case})
+    _fill_missing_case_flags(case, spine if isinstance(spine, dict) else {}, merged)
     return case
+
+
+def _present(value: Any) -> bool:
+    return value not in (None, "")
+
+
+def _fill_missing_case_flags(
+    case: dict[str, Any],
+    spine: dict[str, Any],
+    merged: dict[str, Any],
+) -> None:
+    """Root flags the spine row does not store. Null leaves R0.1 on FixDataQuality."""
+    if case.get("claim_exists") is None:
+        case["claim_exists"] = bool(
+            _present(spine.get("claim_id"))
+            or _present(spine.get("claim_number"))
+            or _present(merged.get("claim_number"))
+            or _present(merged.get("claim_status_code"))
+        )
+    if case.get("fnol_exists") is None:
+        case["fnol_exists"] = bool(
+            _present(case.get("fnol_id")) or _present(spine.get("fnol_id")) or _present(merged.get("fnol_id"))
+        )
+    if not _present(case.get("eval_date")):
+        case["eval_date"] = date.today().isoformat()
+
+    roles = case.get("roles") if isinstance(case.get("roles"), list) else spine.get("roles") or []
+    if case.get("has_adjuster") is None:
+        case["has_adjuster"] = any(
+            str((row or {}).get("role_type_code") or "").upper() == "ADJUSTER"
+            for row in roles
+            if isinstance(row, dict)
+        )
+
+    policy_id = case.get("policy_id") if _present(case.get("policy_id")) else spine.get("policy_id")
+    vehicle_id = (
+        case.get("insurable_object_id")
+        if _present(case.get("insurable_object_id"))
+        else spine.get("insurable_object_id")
+    )
+    covers = case.get("policy_covers_vehicle")
+    if covers is None:
+        covers = spine.get("policy_covers_vehicle")
+    if covers is None:
+        covers = _present(policy_id) and _present(vehicle_id)
+    if case.get("has_policy") is None:
+        case["has_policy"] = _present(policy_id)
+    if case.get("has_vehicle") is None:
+        case["has_vehicle"] = _present(vehicle_id)
+    if case.get("policy_covers_vehicle") is None:
+        case["policy_covers_vehicle"] = _as_bool(covers)
+    if case.get("triangle") is None:
+        case["triangle"] = bool(
+            case.get("has_policy") and case.get("has_vehicle") and _as_bool(case.get("policy_covers_vehicle"))
+        )
 
 
 def _field_names(mapping_or_list: Any) -> list[str]:
