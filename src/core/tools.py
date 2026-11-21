@@ -174,10 +174,10 @@ def _run_catalog(op: str, label: str, params: dict) -> dict:
 
 
 def _entity_params(manager: PackManager, entity_id: str) -> dict[str, str]:
-    key = str(manager.manifest.get("case_id_param") or "").strip()
+    key = str(manager.manifest.get("entry_id_param") or "").strip()
     if not key:
         raise RuntimeError(
-            f"Pack '{manager.pack_name}' manifest is missing case_id_param"
+            f"Pack '{manager.pack_name}' manifest is missing entry_id_param"
         )
     return {key: entity_id}
 

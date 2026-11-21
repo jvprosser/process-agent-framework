@@ -25,39 +25,37 @@ def session_dir() -> Path:
 
 
 def configure_workflow_assets(assets_root: str | None = None) -> Path:
-    """Point ``INS_CLAIMS_REPO_ROOT`` / ``PACK_ROOT`` at a pack or claims tree."""
-    from rules_engine.pack import is_legacy_claims_root, is_pack_root
+    """Point ``INS_CLAIMS_REPO_ROOT`` / ``PACK_ROOT`` at a pack."""
+    from rules_engine.pack import is_pack_root
     from rules_engine.paths import repo_root
 
     if assets_root:
         root = Path(assets_root).expanduser().resolve()
     else:
         wf = workflow_data_dir()
-        if is_pack_root(wf) or is_legacy_claims_root(wf):
+        if is_pack_root(wf):
             root = wf.resolve()
         else:
             return repo_root()
 
-    if not (is_pack_root(root) or is_legacy_claims_root(root)):
-        raise FileNotFoundError(
-            f"Assets root missing pack.yaml or ontology/ + playbook/: {root}."
-        )
+    if not is_pack_root(root):
+        raise FileNotFoundError(f"Assets root missing pack.yaml: {root}.")
     os.environ["INS_CLAIMS_REPO_ROOT"] = str(root)
     os.environ["PACK_ROOT"] = str(root)
     return root
 
 
-def graph_artifact_path(claim_id: str | int) -> Path:
-    """Session case JSON (legacy name; was Turtle)."""
-    return session_dir() / f"claim_{claim_id}_case.json"
+def graph_artifact_path(entry_id: str | int) -> Path:
+    """Session entry JSON."""
+    return session_dir() / f"entry_{entry_id}_case.json"
 
 
-def validation_artifact_path(claim_id: str | int) -> Path:
-    return session_dir() / f"claim_{claim_id}_validation.json"
+def validation_artifact_path(entry_id: str | int) -> Path:
+    return session_dir() / f"entry_{entry_id}_validation.json"
 
 
-def decision_artifact_path(claim_id: str | int) -> Path:
-    return session_dir() / f"claim_{claim_id}_route.json"
+def decision_artifact_path(entry_id: str | int) -> Path:
+    return session_dir() / f"entry_{entry_id}_route.json"
 
 
 def letter_artifact_path(claim_id: str | int) -> Path:
@@ -161,123 +159,8 @@ def normalize_spine_payload(raw: Any) -> dict[str, Any]:
             spine["roles"] = list(payload.get("roles") or [])
         if "claim_id" not in spine and payload.get("claim_id") is not None:
             spine["claim_id"] = payload["claim_id"]
-        if "fnol_id" not in spine and payload.get("fnol_id") is not None:
-            spine["fnol_id"] = payload["fnol_id"]
         return spine
     return payload
-
-
-def assert_spine_has_triangle_fields(spine: dict[str, Any]) -> None:
-    """Fail fast when build would produce a case JSON that validation cannot pass."""
-    missing = [
-        key
-        for key in ("policy_id", "insurable_object_id")
-        if spine.get(key) is None or spine.get(key) == ""
-    ]
-    if missing:
-        raise ValueError(
-            "spine_json missing required field(s) "
-            f"{missing}. Re-call MCP get_claim_spine and pass the full JSON "
-            "unmodified into build_claim_graph (do not summarize or omit keys)."
-        )
-
-
-def assert_signals_has_fnol_fields(signals: dict[str, Any]) -> None:
-    """Fail fast when omitted FNOL flags would default false and steal F6."""
-    required = (
-        "has_injury",
-        "has_third_party_vehicle",
-        "vehicle_listed_on_policy",
-        "peril_covered",
-        "has_unlisted_insured_operator",
-        "estimated_loss_amount",
-        "deductible_amount",
-        "intake_purpose_code",
-    )
-    missing = [key for key in required if key not in signals]
-    if missing:
-        raise ValueError(
-            "signals_json omitted "
-            + ", ".join(missing)
-            + ". Pass the full get_fnol_routing_signals JSON unmodified into "
-            "build_claim_graph (do not summarize or omit keys)."
-        )
-
-
-def assert_signals_has_intake_fields(signals: dict[str, Any]) -> None:
-    """Fail fast when omitted flags would default to false and steal R2.0 / R2.0b."""
-    if signals.get("fnol_exists") is True:
-        assert_signals_has_fnol_fields(signals)
-        return
-    police = signals.get("has_police_report")
-    if police is True or str(police).strip().lower() in {"true", "1", "yes"}:
-        return
-    missing: list[str] = []
-    if "has_incident_report_number" not in signals and not signals.get(
-        "incident_report_number"
-    ):
-        missing.append("has_incident_report_number")
-    if "has_collect_incident_sms" not in signals:
-        missing.append("has_collect_incident_sms")
-    if missing:
-        raise ValueError(
-            "signals_json omitted "
-            + " and ".join(missing)
-            + " while has_police_report is false. Pass the full "
-            "get_claim_routing_signals JSON unmodified into "
-            "build_claim_graph (do not summarize or omit keys)."
-        )
-
-
-def assert_signals_json_is_mcp_observation(raw: Any) -> dict[str, Any]:
-    """Require the raw get_claim_routing_signals Observation, not case JSON.
-
-    Studio Manager often rebuilds a signals object (or passes claim_*_case.json)
-    after MCP already returned has_incident_report_number=true. YAML then sees
-    false/null and steals R2.0. named_op is only on the MCP envelope.
-    """
-    payload = _lower_keys(parse_json_arg(raw, label="signals_json"))
-    if not isinstance(payload, dict):
-        raise ValueError("signals_json must be a JSON object")
-    for wrap_key in ("tool_output", "result", "data", "observation"):
-        inner = payload.get(wrap_key)
-        if isinstance(inner, dict) and inner.get("named_op") in (
-            "get_claim_routing_signals",
-            "get_fnol_routing_signals",
-        ):
-            payload = _lower_keys(inner)
-            break
-    named = payload.get("named_op")
-    if named == "get_fnol_routing_signals":
-        inner = payload.get("signals")
-        if not isinstance(inner, dict) or "has_injury" not in inner:
-            raise ValueError(
-                "get_fnol_routing_signals Observation must include "
-                "signals.has_injury. Pass the run_named_query JSON "
-                "unmodified (do not rebuild signals or pass claim_*_case.json)."
-            )
-        return payload
-    if named == "get_claim_routing_signals":
-        inner = payload.get("signals")
-        if not isinstance(inner, dict) or "has_police_report" not in inner:
-            raise ValueError(
-                "get_claim_routing_signals Observation must include "
-                "signals.has_police_report. Pass the run_named_query JSON "
-                "unmodified (do not rebuild signals or pass claim_*_case.json)."
-            )
-        return payload
-    if "spine" in payload and isinstance(payload.get("signals"), dict):
-        raise ValueError(
-            "signals_json is claim case JSON, not the get_claim_routing_signals "
-            "Observation. Pass that run_named_query JSON unmodified (it must "
-            "include named_op)."
-        )
-    raise ValueError(
-        "signals_json must be the full get_claim_routing_signals or "
-        "get_fnol_routing_signals Observation "
-        f"(named_op on the envelope). Got named_op={named!r}. "
-        "Do not rebuild, summarize, or pass claim_*_case.json."
-    )
 
 
 def normalize_signals_payload(raw: Any) -> dict[str, Any]:

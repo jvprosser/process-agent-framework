@@ -5,13 +5,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from rules_engine.pack import is_legacy_claims_root, is_pack_root, load_pack
+from rules_engine.pack import is_pack_root, load_pack
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
 
 def _has_assets(candidate: Path) -> bool:
-    return is_pack_root(candidate) or is_legacy_claims_root(candidate)
+    return is_pack_root(candidate)
 
 
 def _find_repo_root() -> Path:
@@ -42,7 +42,7 @@ def _find_repo_root() -> Path:
         if _has_assets(candidate):
             return candidate
     raise FileNotFoundError(
-        "Could not locate pack.yaml or ontology/claims.json + playbook/ "
+        "Could not locate pack.yaml "
         "(set WORKFLOW_DATA_DIRECTORY, PACK_ROOT, or INS_CLAIMS_REPO_ROOT)"
     )
 
@@ -79,4 +79,4 @@ def default_ontology_path() -> Path:
     pack = current_pack()
     if pack is not None:
         return pack.schema_path
-    return repo_path("ontology", "claims.json")
+    return repo_path("ontology", "schema.json")

@@ -1,5 +1,5 @@
 id: retirement_rollovers
-case_id_param: claim_id
+entry_id_param: claim_id
 ontology: ontology/rollovers.json
 playbook: playbook/playbook.yaml
 exemplars: exemplars.yaml

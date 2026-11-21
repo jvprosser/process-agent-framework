@@ -1,5 +1,5 @@
 id: retirement_distributions
-case_id_param: claim_id
+entry_id_param: claim_id
 ontology: ontology/distributions.json
 playbook: playbook/playbook.yaml
 exemplars: exemplars.yaml

@@ -13,8 +13,8 @@ import yaml
 class Pack:
     id: str
     root: Path
-    case_id_param: str = "claim_id"
-    schema: str = "ontology/claims.json"
+    entry_id_param: str = "entry_id"
+    schema: str = "ontology/schema.json"
     playbook: str = "playbook/playbook.yaml"
     exemplars: str = "exemplars.yaml"
     graph: dict[str, Any] = field(default_factory=dict)
@@ -51,11 +51,11 @@ def load_pack(root: str | Path) -> Pack:
     return Pack(
         id=str(raw.get("id") or root_path.name),
         root=root_path,
-        case_id_param=str(raw.get("case_id_param") or "claim_id"),
+        entry_id_param=str(raw.get("entry_id_param") or "entry_id"),
         schema=str(
             raw.get("schema")
             or raw.get("ontology")
-            or "ontology/claims.json"
+            or "ontology/schema.json"
         ),
         playbook=str(raw.get("playbook") or "playbook/playbook.yaml"),
         exemplars=str(raw.get("exemplars") or "exemplars.yaml"),
@@ -68,9 +68,3 @@ def load_pack(root: str | Path) -> Pack:
 
 def is_pack_root(candidate: Path) -> bool:
     return (candidate / "pack.yaml").is_file()
-
-
-def is_legacy_claims_root(candidate: Path) -> bool:
-    playbook = (candidate / "playbook" / "playbook.yaml").is_file()
-    schema = (candidate / "ontology" / "claims.json").is_file()
-    return playbook and schema

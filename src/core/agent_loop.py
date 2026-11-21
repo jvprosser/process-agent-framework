@@ -147,9 +147,9 @@ def _read_params(pack: PackManager, route_json: dict[str, Any]) -> dict[str, str
     entity = str(route_json.get("entity_id") or "").strip()
     if not entity:
         raise RuntimeError("route_json is missing entity_id")
-    key = str(pack.manifest.get("case_id_param") or "").strip()
+    key = str(pack.manifest.get("entry_id_param") or "").strip()
     if not key:
-        raise RuntimeError(f"Pack '{pack.pack_name}' manifest is missing case_id_param")
+        raise RuntimeError(f"Pack '{pack.pack_name}' manifest is missing entry_id_param")
     return {key: entity}
 
 

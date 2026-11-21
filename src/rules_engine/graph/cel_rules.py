@@ -7,6 +7,7 @@ from typing import Any
 
 import celpy
 from celpy.adapter import json_to_cel
+from celpy.evaluation import CELEvalError
 
 _ENV = celpy.Environment()
 _PROGRAMS: dict[str, Any] = {}
@@ -51,7 +52,6 @@ _STR_KEYS = (
     "tenant_roster_review_detail",
     "intake_purpose_code",
     "triage_status_code",
-    "fnol_number",
 )
 _NUM_KEYS = (
     "rmd_shortfall_amount",
@@ -63,8 +63,6 @@ _NUM_KEYS = (
     "estimated_loss_amount",
     "deductible_amount",
     "total_insured_value",
-    "prior_claims_count",
-    "claims_count_36m",
     "total_incurred_36m",
     "siu_score",
     "survey_age_months",
@@ -76,7 +74,6 @@ _NUM_KEYS = (
     "sov_min_coinsurance_pct",
 )
 _BOOL_KEYS = (
-    "fnol_exists",
     "hold_or_aml_flag",
     "has_participant_self_certified",
     "requires_substantiation_audit",
@@ -172,5 +169,10 @@ def eval_cel(expr: str, entry: dict[str, Any]) -> bool:
     """Return True when the CEL expression is true on the flattened entry."""
     program = compile_cel(expr)
     activation = json_to_cel(flatten_entry(entry))
-    result = program.evaluate(activation)
+    try:
+        result = program.evaluate(activation)
+    except CELEvalError:
+        return False
+    if isinstance(result, CELEvalError):
+        return False
     return bool(result)

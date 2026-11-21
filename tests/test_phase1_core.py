@@ -80,7 +80,7 @@ def test_tools_are_native_and_route_from_the_playbook(monkeypatch, tmp_path: Pat
     built = tools.build_session_graph("9100")
     case_path = Path(built["session_case"])
     assert case_path.is_file()
-    assert case_path.name == "claim_9100_case.json"
+    assert case_path.name == "entry_9100_case.json"
     case = json.loads(case_path.read_text(encoding="utf-8"))
     assert case["class_code"] == "4812"
 

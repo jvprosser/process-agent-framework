@@ -100,7 +100,7 @@ def test_chat_envelope_routes_submission(monkeypatch, tmp_path: Path):
     assert body["content"]["routing_summary"]["routing_reason"]
     assert body["content"]["checks"][-1]["probe_id"] == "P00_PROHIBITED_CLASS_CODE"
     assert body["content"]["view_data"] == {}
-    case_path = tmp_path / "claim_9100_case.json"
+    case_path = tmp_path / "entry_9100_case.json"
     assert body["content"]["session_graph"] == json.loads(case_path.read_text(encoding="utf-8"))
     assert body["actions"] == {
         "quick_replies": ["Please write the recommended letter."],
