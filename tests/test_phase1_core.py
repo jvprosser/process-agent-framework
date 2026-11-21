@@ -11,7 +11,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from core.mistral_client import LOCAL_API_KEY, LOCAL_SERVER_URL, local_client
+from core.mistral_client import LOCAL_API_KEY, local_client
 from core.pack_manager import PackManager
 from core import tools
 
@@ -37,10 +37,16 @@ def test_missing_pack_and_missing_folder_raise(tmp_path: Path):
         PackManager("empty_pack", str(tmp_path / "packs"))
 
 
-def test_local_client_uses_dummy_key_and_local_server():
+def test_local_client_uses_dummy_key_and_local_server(monkeypatch):
+    monkeypatch.delenv("MISTRAL_LOCAL_URL", raising=False)
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("CDP_TOKEN", raising=False)
+    from core import mistral_client
+
+    monkeypatch.setattr(mistral_client, "_JWT_PATH", Path("/no/such/jwt"))
     client = local_client()
     url, _params = client.sdk_configuration.get_server_details()
-    assert url == LOCAL_SERVER_URL
+    assert url == "http://localhost:8000"
     assert "api.mistral.ai" not in url
     security = client.sdk_configuration.security
     api_key = security.api_key

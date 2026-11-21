@@ -11,7 +11,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from api import chat as chat_api
-from core.mistral_client import LOCAL_SERVER_URL, local_client, local_server_url
+from core import mistral_client
+from core.mistral_client import LOCAL_SERVER_URL, local_api_key, local_client, local_server_url
 from main import app
 
 VIEW = {"named_op": "get_pd_view", "incident_report_number": "PD-19"}
@@ -126,11 +127,23 @@ def test_actions_stay_empty_without_a_letter(monkeypatch):
     assert ("query", "get_pd_view") not in QUERIES
 
 
+def test_cloudera_inference_uses_the_workbench_jwt(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("MISTRAL_LOCAL_URL", "https://serving.example/v1")
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("CDP_TOKEN", raising=False)
+    monkeypatch.setenv("CDSW_API_KEY", "not-the-inference-token")
+    jwt = tmp_path / "jwt"
+    jwt.write_text('{"access_token": "workload-jwt"}', encoding="utf-8")
+    monkeypatch.setattr(mistral_client, "_JWT_PATH", jwt)
+    assert local_api_key() == "workload-jwt"
+
+
 def test_local_url_override(monkeypatch):
+    monkeypatch.setattr(mistral_client, "_JWT_PATH", Path("/no/such/jwt"))
     monkeypatch.delenv("MISTRAL_LOCAL_URL", raising=False)
     assert local_server_url() == LOCAL_SERVER_URL
     monkeypatch.setenv("MISTRAL_LOCAL_URL", "http://localhost:11434/v1")
     client = local_client()
     url, _params = client.sdk_configuration.get_server_details()
-    assert url == "http://localhost:11434/v1"
+    assert url == "http://localhost:11434"
     assert "api.mistral.ai" not in url
