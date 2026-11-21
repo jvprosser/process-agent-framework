@@ -12,8 +12,16 @@ def workflow_data_dir() -> Path:
     return Path(os.environ.get("WORKFLOW_DATA_DIRECTORY", "/workflow_data")).expanduser()
 
 
+def _default_session_dir() -> Path:
+    """Project-local folder. `/workspace` is a Cloudera mount, not a local path."""
+    return Path(__file__).resolve().parents[2] / "workspace"
+
+
 def session_dir() -> Path:
-    return Path(os.environ.get("SESSION_DIRECTORY", os.getcwd())).expanduser()
+    configured = os.environ.get("SESSION_DIRECTORY", "").strip()
+    path = Path(configured).expanduser() if configured else _default_session_dir()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def configure_workflow_assets(assets_root: str | None = None) -> Path:

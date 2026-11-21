@@ -16,7 +16,7 @@ Configure the following environment variables in your Cloudera AI Project Settin
 * `CDSW_APP_PORT`: Set by Cloudera automatically (defaults to `8080`), used by FastAPI to serve the split-pane UI.
 * `MISTRAL_LOCAL_URL`: Optional. On a workbench session the client uses the Nemotron endpoint `https://ml-64288d82-5dd.go01-dem.ylcu-atmi.cloudera.site/namespaces/serving-default/endpoints/goes---nemotron-3-super-120b/v1` and the model `nvidia/nemotron-3-super-120b-a12b`, with the bearer token from `/tmp/jwt`. Set this variable only to point at a different endpoint.
 * `MISTRAL_MODEL`: Optional override for the model id. The workbench default is `nvidia/nemotron-3-super-120b-a12b`.
-* `SESSION_DIRECTORY`: Set to `/workspace` or a localized temp folder where the agent will materialize `claim_{id}_case.json` and artifact text files.
+* `SESSION_DIRECTORY`: Optional. When unset, `claim_{id}_case.json` and letter files are written to the project `workspace/` directory. Set this only to use a different writable folder.
 * Impala uses the same variables as the original claims MCP server. `IMPALA_HOST` may be a hostname or a pasted coordinator URL. Defaults match that server: `IMPALA_PORT=443`, `IMPALA_AUTH_MECHANISM=LDAP`, `IMPALA_USE_SSL=true`, `IMPALA_USE_HTTP_TRANSPORT=true`, `IMPALA_HTTP_PATH=cliservice`. Set `IMPALA_USER`, `IMPALA_PASSWORD`, and `IMPALA_DATABASE`.
 
 **4. Inference Server Boot (If Hosting Locally)**

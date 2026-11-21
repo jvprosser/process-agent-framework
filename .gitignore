@@ -1,3 +1,6 @@
+# Session artifacts written when SESSION_DIRECTORY is unset
+/workspace/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
