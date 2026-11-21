@@ -141,19 +141,30 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     client = local_client()
-    entity_id = run_orchestrator(request.user_text, client)
-    if entity_id is None:
+    entity_id = None
+    try:
+        entity_id = run_orchestrator(request.user_text, client)
+        if entity_id is None:
+            return _response(
+                pack_id=request.pack_id,
+                run_id=run_id,
+                entity_id=None,
+                terminal=False,
+                chat_text=_MISSING_ID,
+                debug_cot=["orchestrator: no entity id"],
+            )
+
+        route = run_intake(entity_id, client, pack)
+        specialist = run_specialist(route, client, pack)
+    except Exception as exc:
         return _response(
             pack_id=request.pack_id,
             run_id=run_id,
-            entity_id=None,
+            entity_id=entity_id,
             terminal=False,
-            chat_text=_MISSING_ID,
-            debug_cot=["orchestrator: no entity id"],
+            chat_text=f"{exc.__class__.__name__}: {exc}",
+            debug_cot=[f"{exc.__class__.__name__}: {exc}"],
         )
-
-    route = run_intake(entity_id, client, pack)
-    specialist = run_specialist(route, client, pack)
     return _response(
         pack_id=request.pack_id,
         run_id=run_id,

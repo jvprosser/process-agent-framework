@@ -335,7 +335,10 @@ def _agent_prompt(pack: PackManager, agent_role: str) -> str:
         raise RuntimeError("agent_role is not a file name")
     agents_dir = pack.root / "agents"
     if not agents_dir.is_dir():
-        raise RuntimeError(f"Pack '{pack.pack_name}' is missing agents/")
+        return (
+            f"You are {agent_role}. Follow the routing JSON. "
+            "Do not change next_step, agent_role, or allowed_tools."
+        )
     stems = {agent_role, _snake(agent_role)}
     matches = [
         path

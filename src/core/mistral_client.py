@@ -17,9 +17,25 @@ def local_server_url() -> str:
     return configured or LOCAL_SERVER_URL
 
 
+def local_api_key() -> str:
+    """Bearer token for the configured inference server.
+
+    vLLM accepts the dummy key. Cloudera AI Inference is behind Knox and
+    rejects that key, so a non-default server URL uses CDSW_API_KEY.
+    """
+    configured = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if configured:
+        return configured
+    if local_server_url() != LOCAL_SERVER_URL:
+        cdsw = os.environ.get("CDSW_API_KEY", "").strip()
+        if cdsw:
+            return cdsw
+    return LOCAL_API_KEY
+
+
 def local_client() -> Mistral:
-    """Open a client for the local server. There is no cloud API fallback."""
-    return Mistral(api_key=LOCAL_API_KEY, server_url=local_server_url())
+    """Open a client for the configured server. There is no cloud API fallback."""
+    return Mistral(api_key=local_api_key(), server_url=local_server_url())
 
 
 def local_model() -> str:

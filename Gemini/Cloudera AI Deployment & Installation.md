@@ -14,7 +14,7 @@ pip install -r requirements.txt
 Configure the following environment variables in your Cloudera AI Project Settings to ensure the FastAPI loop and Mistral client bind correctly:
 
 * `CDSW_APP_PORT`: Set by Cloudera automatically (defaults to `8080`), used by FastAPI to serve the split-pane UI.
-* `MISTRAL_LOCAL_URL`: Set to your inference server's endpoint (e.g., `http://localhost:8000/v1` for vLLM or `http://localhost:11434/v1` for Ollama).
+* `MISTRAL_LOCAL_URL`: Set to your inference server's endpoint (e.g., `http://localhost:8000/v1` for vLLM or `http://localhost:11434/v1` for Ollama). When this is a Cloudera AI Inference URL, the client sends `CDSW_API_KEY`. Set `MISTRAL_API_KEY` only to override that key.
 * `SESSION_DIRECTORY`: Set to `/workspace` or a localized temp folder where the agent will materialize `claim_{id}_case.json` and artifact text files.
 * `IMPALA_HOST` / `IMPALA_PORT`: Required by the MCP V7 subprocess to execute the allow-listed queries.
 

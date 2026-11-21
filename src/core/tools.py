@@ -48,12 +48,16 @@ def build_session_graph(entity_id: str) -> dict:
     if any(part in entity for part in ("/", "\\", "..")):
         raise RuntimeError("entity_id is not a safe session name")
 
-    spine_label = _single_label(manager.catalog, "_spine")
-    signals_label = _single_label(manager.catalog, "_routing_signals")
+    spine_label = _graph_label(manager, "_spine", "session_spine")
+    signals_label = _graph_label(manager, "_routing_signals", "session_signals")
     params = _entity_params(manager, entity)
-    spine = _require_read(_run_catalog("query", spine_label, params), spine_label)
-    signals = _require_read(
-        _run_catalog("query", signals_label, params), signals_label
+    spine = _as_graph_object(
+        _require_read(_run_catalog("query", spine_label, params), spine_label),
+        "spine",
+    )
+    signals = _as_graph_object(
+        _require_read(_run_catalog("query", signals_label, params), signals_label),
+        "signals",
     )
 
     from rules_engine.graph.case_json import build_case_graph
@@ -174,6 +178,26 @@ def _entity_params(manager: PackManager, entity_id: str) -> dict[str, str]:
             f"Pack '{manager.pack_name}' manifest is missing case_id_param"
         )
     return {key: entity_id}
+
+
+def _graph_label(manager: PackManager, suffix: str, manifest_key: str) -> str:
+    chosen = str(manager.manifest.get(manifest_key) or "").strip()
+    if chosen:
+        return chosen
+    return _single_label(manager.catalog, suffix)
+
+
+def _as_graph_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    """Turn a multi-statement read into the object the case builder expects."""
+    rows = payload.get(key)
+    if not isinstance(rows, list):
+        return payload
+    object_row = dict(rows[0]) if rows and isinstance(rows[0], dict) else {}
+    shaped = dict(payload)
+    shaped[key] = object_row
+    if key == "spine" and isinstance(payload.get("roles"), list):
+        object_row["roles"] = payload["roles"]
+    return shaped
 
 
 def _single_label(catalog: dict[str, Any], suffix: str) -> str:
