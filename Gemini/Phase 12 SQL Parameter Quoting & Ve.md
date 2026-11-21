@@ -37,3 +37,8 @@ The backend migration from legacy Cloudera Agent Studio/CrewAI to the domain-agn
 2. Restarting `serve.py` (or `src/main.py`) and submitting Claim 401 executes successfully.
 3. The server stdout logs confirm `get_claim_spine` receives `'401'` (quoted) and returns the expected rows from Impala.
 4. The right-pane JSON viewer in the UI confirms the `content.checks` properly evaluate against the populated case graph rather than routing to `FixDataQuality` due to a missing spine.
+
+Grok:
+Pushed `d5e5421` to `main`. Claim and FNOL id placeholders are now single-quoted, so `get_claim_spine` sends `claim_id = '401'`. Database names stay unquoted. `{run_id}` values that were not already quoted are quoted too.
+
+Pull that commit in the Cloudera project and restart `serve.py`, then submit claim 401. The server log should show `claim_id = '401'` and the row count from Impala.
