@@ -138,6 +138,43 @@ def test_cloudera_inference_uses_the_workbench_jwt(monkeypatch, tmp_path: Path):
     assert local_api_key() == "workload-jwt"
 
 
+def test_knox_error_page_is_not_sent_as_the_bearer_token(monkeypatch, tmp_path: Path):
+    html = (
+        "<html><td>/go01-aw-dl-md/kt-kerberos/knoxtoken/api/v2/token</td></html>"
+    )
+    monkeypatch.setenv("MISTRAL_LOCAL_URL", "https://serving.example/v1")
+    monkeypatch.setenv("MISTRAL_API_KEY", html)
+    monkeypatch.setenv("CDP_TOKEN", html)
+    monkeypatch.delenv("CDSW_API_KEY", raising=False)
+    jwt = tmp_path / "jwt"
+    jwt.write_text('{"access_token": "workload-jwt"}', encoding="utf-8")
+    monkeypatch.setattr(mistral_client, "_JWT_PATH", jwt)
+    assert local_api_key() == "workload-jwt"
+
+
+def test_knox_error_page_names_the_token_endpoint(monkeypatch, tmp_path: Path):
+    html = (
+        "<html><td>/go01-aw-dl-md/kt-kerberos/knoxtoken/api/v2/token</td></html>"
+    )
+    monkeypatch.setenv(
+        "MISTRAL_LOCAL_URL",
+        "https://ml.example.cloudera.site/namespaces/serving-default/endpoints/nemotron/v1",
+    )
+    monkeypatch.setenv("MISTRAL_API_KEY", html)
+    monkeypatch.setenv("CDP_TOKEN", html)
+    monkeypatch.delenv("CDSW_API_KEY", raising=False)
+    jwt = tmp_path / "jwt"
+    jwt.write_text(html, encoding="utf-8")
+    monkeypatch.setattr(mistral_client, "_JWT_PATH", jwt)
+    try:
+        local_api_key()
+    except RuntimeError as exc:
+        text = str(exc)
+    else:
+        raise AssertionError("expected a token error")
+    assert "/go01-aw-dl-md/kt-kerberos/knoxtoken/api/v2/token" in text
+
+
 def test_local_url_override(monkeypatch):
     monkeypatch.setattr(mistral_client, "_JWT_PATH", Path("/no/such/jwt"))
     monkeypatch.delenv("MISTRAL_LOCAL_URL", raising=False)
