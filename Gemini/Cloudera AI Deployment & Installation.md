@@ -17,7 +17,7 @@ Configure the following environment variables in your Cloudera AI Project Settin
 * `MISTRAL_LOCAL_URL`: Optional. On a workbench session the client uses the Nemotron endpoint `https://ml-64288d82-5dd.go01-dem.ylcu-atmi.cloudera.site/namespaces/serving-default/endpoints/goes---nemotron-3-super-120b/v1` and the model `nvidia/nemotron-3-super-120b-a12b`, with the bearer token from `/tmp/jwt`. Set this variable only to point at a different endpoint.
 * `MISTRAL_MODEL`: Optional override for the model id. The workbench default is `nvidia/nemotron-3-super-120b-a12b`.
 * `SESSION_DIRECTORY`: Set to `/workspace` or a localized temp folder where the agent will materialize `claim_{id}_case.json` and artifact text files.
-* `IMPALA_HOST` / `IMPALA_PORT`: Required by the MCP V7 subprocess to execute the allow-listed queries.
+* `IMPALA_HOST` / `IMPALA_PORT`: Impala coordinator. A pasted URL such as `http://coordinator-default-impala-aws.dw-go01-demo-aws.ylcu-atmi.cloudera.site/` is accepted. Port `443` connects with TLS and HTTP transport (`cliservice`) and authenticates with the workbench JWT from `/tmp/jwt`.
 
 **4. Inference Server Boot (If Hosting Locally)**
 If you are not using a remote API, launch your local inference engine in a background terminal session before starting the application. For Ollama:
