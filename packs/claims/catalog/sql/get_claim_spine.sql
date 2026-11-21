@@ -33,11 +33,11 @@ LEFT JOIN ${var:database}.policy_insurable_object pio
 LEFT JOIN ${var:database}.policy_coverage pc ON c.policy_coverage_id = pc.policy_coverage_id
 LEFT JOIN ${var:database}.coverage cov ON pc.coverage_id = cov.coverage_id
 LEFT JOIN ${var:database}.claim_lifecycle cl ON cl.claim_id = c.claim_id
-WHERE c.claim_id = ${var:claim_id}
+WHERE c.claim_id = '${var:claim_id}'
 LIMIT 1;
 
 -- result: roles
 SELECT claim_party_role_id, party_id, role_type_code, is_current_assignment
 FROM ${var:database}.claim_party_role
-WHERE claim_id = ${var:claim_id}
+WHERE claim_id = '${var:claim_id}'
   AND is_current_assignment = TRUE;

@@ -1,1 +1,1 @@
--- No Impala statement. Rows are already on main; mode stays table-append for {run_id}.
+-- No Impala statement. Rows are already on main; mode stays table-append for '{run_id}'.

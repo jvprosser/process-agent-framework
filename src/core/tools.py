@@ -151,6 +151,8 @@ def _call_mcp(op: str, label: str, params: dict, manager: PackManager) -> dict:
         text=True,
         check=False,
     )
+    if completed.stderr.strip():
+        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
     stdout = completed.stdout.strip()
     if not stdout:
         detail = completed.stderr.strip() or f"exit {completed.returncode}"

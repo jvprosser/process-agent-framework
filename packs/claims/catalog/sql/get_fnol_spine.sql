@@ -44,5 +44,5 @@ LEFT JOIN ${database}.policy_coverage pc
  AND pc.coverage_id = cov.coverage_id
  AND pc.is_active = TRUE
  AND pc.expiration_date IS NULL
-WHERE f.fnol_id = ${fnol_id}
+WHERE f.fnol_id = '${fnol_id}'
 LIMIT 1

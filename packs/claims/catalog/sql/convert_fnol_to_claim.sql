@@ -3,7 +3,7 @@ SELECT fnol_id, fnol_number, triage_status_code, claim_id, policy_id,
        insurable_object_id, loss_event_id, estimated_loss_amount,
        report_timestamp, intake_purpose_code
 FROM ${var:database}.fnol
-WHERE fnol_id = ${var:fnol_id}
+WHERE fnol_id = '${var:fnol_id}'
 LIMIT 1;
 
 -- result: coverage
@@ -21,7 +21,7 @@ INNER JOIN ${var:database}.coverage cov ON cov.coverage_id = pc.coverage_id
    OR (UPPER(COALESCE(le.loss_cause_code, '')) <> 'COLLISION'
     AND cov.coverage_type_code = 'COMPREHENSIVE')
  )
-WHERE f.fnol_id = ${var:fnol_id}
+WHERE f.fnol_id = '${var:fnol_id}'
 LIMIT 1;
 
 -- result: claim
@@ -104,7 +104,7 @@ INSERT INTO ${var:database}.claim_reserve (
 -- result: stamp
 UPDATE ${var:database}.fnol
 SET triage_status_code = 'CONVERTED', claim_id = {claim_id}
-WHERE fnol_id = ${var:fnol_id}
+WHERE fnol_id = '${var:fnol_id}'
   AND UPPER(COALESCE(triage_status_code, '')) IN ('OPEN', 'ADJUSTER_REVIEW');
 
 -- result: audit

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -121,11 +122,30 @@ def execute(
         allowed = _READ_PREFIXES if label_kind == "read" else _WRITE_PREFIXES
         if prefix not in allowed:
             return _error(f"statement cannot start with {prefix or 'empty'}", label=name)
+    _log_sql(name, rendered)
     try:
         ran = _run_all(rendered, query_rows=query_rows, execute_dml=execute_dml)
     except Exception as exc:
         return _error(str(exc), label=name)
+    _log_rows(name, ran)
     return _payload(name, label_kind, statements, ran)
+
+
+def _log_sql(label: str, statements: list[str]) -> None:
+    for sql in statements:
+        print(f"iceberg-mcp-server SQL [{label}]: {sql}", file=sys.stderr, flush=True)
+
+
+def _log_rows(label: str, ran: list[dict[str, Any]]) -> None:
+    for item in ran:
+        if item.get("kind") != "read":
+            continue
+        rows = item.get("rows") or []
+        print(
+            f"iceberg-mcp-server rows [{label}]: {len(rows)} {json.dumps(rows, default=str)}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def _bind(catalog: dict[str, Any], spec: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:

@@ -22,7 +22,7 @@ sub AS (
   SELECT COUNT(*) AS cnt,
          MIN(subrogation_case_id) AS subrogation_case_id,
          MIN(subrogation_status_code) AS subrogation_status_code
-  FROM ${var:database}.subrogation_case WHERE claim_id = ${var:claim_id}
+  FROM ${var:database}.subrogation_case WHERE claim_id = '${var:claim_id}'
 ),
 lit AS (
   SELECT COUNT(*) AS cnt,
@@ -34,58 +34,58 @@ lit AS (
          MIN(filed_date) AS filed_date,
          MIN(closed_date) AS closed_date,
          MIN(litigation_status_code) AS litigation_status_code
-  FROM ${var:database}.litigation_case WHERE claim_id = ${var:claim_id}
+  FROM ${var:database}.litigation_case WHERE claim_id = '${var:claim_id}'
 ),
 inj AS (
-  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_injury WHERE claim_id = ${var:claim_id}
+  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_injury WHERE claim_id = '${var:claim_id}'
 ),
 pr AS (
   SELECT COUNT(*) AS cnt, MIN(police_report_id) AS police_report_id
-  FROM ${var:database}.police_report WHERE claim_id = ${var:claim_id}
+  FROM ${var:database}.police_report WHERE claim_id = '${var:claim_id}'
 ),
 intake AS (
   SELECT COUNT(*) AS cnt,
          MIN(incident_report_number) AS incident_report_number
   FROM ${var:database}.claim_police_intake
-  WHERE claim_id = ${var:claim_id}
+  WHERE claim_id = '${var:claim_id}'
     AND incident_report_number IS NOT NULL
     AND TRIM(incident_report_number) <> ''
 ),
 sms AS (
   SELECT COUNT(*) AS cnt
   FROM ${var:database}.claim_outbound_message
-  WHERE claim_id = ${var:claim_id}
+  WHERE claim_id = '${var:claim_id}'
     AND purpose_code = 'COLLECT_INCIDENT_REPORT_NUMBER'
 ),
 fd AS (
   SELECT COUNT(*) AS cnt, MIN(fault_determination_id) AS fault_determination_id
-  FROM ${var:database}.fault_determination WHERE claim_id = ${var:claim_id}
+  FROM ${var:database}.fault_determination WHERE claim_id = '${var:claim_id}'
 ),
 ofr AS (
   SELECT COUNT(*) AS cnt,
          SUM(CASE WHEN offer_status_code = 'EXTENDED' THEN 1 ELSE 0 END) AS extended_cnt,
          SUM(CASE WHEN offer_status_code = 'ACCEPTED' THEN 1 ELSE 0 END) AS accepted_cnt
-  FROM ${var:database}.claim_offer WHERE claim_id = ${var:claim_id}
+  FROM ${var:database}.claim_offer WHERE claim_id = '${var:claim_id}'
 ),
 pay AS (
-  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_payment WHERE claim_id = ${var:claim_id}
+  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_payment WHERE claim_id = '${var:claim_id}'
 ),
 rec AS (
-  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_recovery WHERE claim_id = ${var:claim_id}
+  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_recovery WHERE claim_id = '${var:claim_id}'
 ),
 res AS (
   SELECT COUNT(*) AS cnt FROM ${var:database}.claim_reserve
-  WHERE claim_id = ${var:claim_id} AND is_current = TRUE
+  WHERE claim_id = '${var:claim_id}' AND is_current = TRUE
 ),
 fa AS (
   SELECT COUNT(*) AS cnt,
          MIN(fraud_assessment_id) AS fraud_assessment_id,
          MIN(outcome_code) AS fraud_outcome_code
   FROM ${var:database}.fraud_assessment
-  WHERE claim_id = ${var:claim_id} AND outcome_code IN ('SUSPECTED', 'PENDING')
+  WHERE claim_id = '${var:claim_id}' AND outcome_code IN ('SUSPECTED', 'PENDING')
 ),
 doc AS (
-  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_document WHERE claim_id = ${var:claim_id}
+  SELECT COUNT(*) AS cnt FROM ${var:database}.claim_document WHERE claim_id = '${var:claim_id}'
 )
 SELECT
   (sub.cnt > 0) AS has_subrogation_case,
@@ -133,7 +133,7 @@ CROSS JOIN fa
 CROSS JOIN doc;
 
 -- result: injury_ids
-SELECT claim_injury_id FROM ${var:database}.claim_injury WHERE claim_id = ${var:claim_id};
+SELECT claim_injury_id FROM ${var:database}.claim_injury WHERE claim_id = '${var:claim_id}';
 
 -- result: insured_operators
 SELECT
@@ -150,16 +150,16 @@ LEFT JOIN ${var:database}.policy_driver pd
   ON pd.policy_id = c.policy_id
  AND pd.driver_id = ld.driver_id
  AND pd.expiration_date IS NULL
-WHERE ld.claim_id = ${var:claim_id}
+WHERE ld.claim_id = '${var:claim_id}'
   AND ld.driver_role_code = 'INSURED_OPERATOR';
 
 -- result: offers
 SELECT claim_offer_id, offer_status_code
 FROM ${var:database}.claim_offer
-WHERE claim_id = ${var:claim_id};
+WHERE claim_id = '${var:claim_id}';
 
 -- result: payment_ids
-SELECT claim_payment_id FROM ${var:database}.claim_payment WHERE claim_id = ${var:claim_id};
+SELECT claim_payment_id FROM ${var:database}.claim_payment WHERE claim_id = '${var:claim_id}';
 
 -- result: recovery_ids
-SELECT claim_recovery_id FROM ${var:database}.claim_recovery WHERE claim_id = ${var:claim_id};
+SELECT claim_recovery_id FROM ${var:database}.claim_recovery WHERE claim_id = '${var:claim_id}';

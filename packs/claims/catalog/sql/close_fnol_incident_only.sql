@@ -1,6 +1,6 @@
 -- result: close
 UPDATE ${var:database}.fnol SET triage_status_code = 'INCIDENT_ONLY'
-WHERE fnol_id = ${var:fnol_id}
+WHERE fnol_id = '${var:fnol_id}'
   AND UPPER(COALESCE(triage_status_code, '')) IN ('OPEN', 'ADJUSTER_REVIEW');
 
 -- result: audit

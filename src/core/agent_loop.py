@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -19,6 +20,8 @@ from core.tools import (
 from mistralai.client import Mistral
 
 _ROUTE_KEYS = ("next_step", "agent_role", "allowed_tools", "write")
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_TOOL_CALL_BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL | re.IGNORECASE)
 _MODEL_ERRORS = (httpx.HTTPError, ConnectionError, TimeoutError)
 _CORE_TOOLS = {
     "run_named_query": run_named_query,
@@ -121,6 +124,7 @@ def run_specialist(route_json: dict, client: Mistral, pack: PackManager) -> dict
     if write_label and not any(item.get("label") == write_label for item in invocations):
         invocations.extend(_execute_write(write_label, route_json))
         logs.append(f"run_named_write {write_label}")
+    text = _sanitize_chat_text(text)
     if not text:
         text = _summary(route_json)
     return {
@@ -236,12 +240,64 @@ def _specialist_text(
         return "", [], [f"specialist model error: {exc}"]
     message = _choice_message(response)
     logs = _message_lines("specialist", message)
+    raw = _content(message)
     invocations: list[dict[str, Any]] = []
     for call in _tool_calls(message):
         recorded = _dispatch_allowed(call, allowed, write_label, route_json)
         if recorded is not None:
             invocations.append(recorded)
-    return _content(message).strip(), invocations, logs
+    for name, label in _xml_tool_calls(raw):
+        if any(item.get("tool") == name and item.get("label") == label for item in invocations):
+            continue
+        if not _label_allowed(name, label, allowed, write_label):
+            logs.append(f"specialist xml tool {name} {label} ignored")
+            continue
+        result = run_named_write(label, _write_params(route_json))
+        invocations.append({"tool": name, "label": label, "result": result})
+        logs.append(f"specialist xml run_named_write {label}")
+    return raw.strip(), invocations, logs
+
+
+def _sanitize_chat_text(raw_text: str) -> str:
+    """Drop leaked chain-of-thought and XML tool calls from the UI reply."""
+    clean = _THINK_BLOCK.sub("", raw_text or "")
+    clean = _TOOL_CALL_BLOCK.sub("", clean)
+    return clean.strip()
+
+
+def _xml_tool_calls(raw_text: str) -> list[tuple[str, str]]:
+    """Labels the model wrote as XML instead of a native tool_calls object."""
+    found: list[tuple[str, str]] = []
+    for match in _TOOL_CALL_BLOCK.finditer(raw_text or ""):
+        name, label = _parse_tool_call_body(match.group(1))
+        if name and label:
+            found.append((name, label))
+    return found
+
+
+def _parse_tool_call_body(body: str) -> tuple[str, str]:
+    text = body.strip()
+    payload: Any
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+    if isinstance(payload, dict):
+        name = str(payload.get("name") or payload.get("tool") or "").strip()
+        args = payload.get("arguments") or payload.get("parameters") or {}
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                args = {}
+        label = str(args.get("label") or "").strip() if isinstance(args, dict) else ""
+        return name, label
+    if "run_named_write" not in text:
+        return "", ""
+    label_match = re.search(r"""label["'\s:=]+["']?([A-Za-z_][A-Za-z0-9_]*)""", text)
+    if label_match is None:
+        return "", ""
+    return "run_named_write", label_match.group(1)
 
 
 def _execute_write(write_label: str | None, route_json: dict[str, Any]) -> list[dict[str, Any]]:

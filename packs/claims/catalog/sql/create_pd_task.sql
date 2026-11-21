@@ -4,7 +4,7 @@ INSERT INTO ${var:database}.pd_task (
   task_status_code, due_date, incident_report_number, run_id, created_at
 ) VALUES (
   {pd_task_id},
-  ${var:claim_id},
+  '${var:claim_id}',
   {loss_event_id},
   '{task_type_code}',
   'OPEN',
@@ -35,7 +35,7 @@ INSERT INTO ${var:database}.agent_run_audit (
 -- result: existing_sms
 SELECT message_id, to_phone, body_text, run_id
 FROM ${var:database}.claim_outbound_message
-WHERE claim_id = ${var:claim_id}
+WHERE claim_id = '${var:claim_id}'
   AND purpose_code = 'COLLECT_INCIDENT_REPORT_NUMBER'
 ORDER BY created_at DESC
 LIMIT 1;
@@ -46,7 +46,7 @@ INSERT INTO ${var:database}.claim_outbound_message (
   purpose_code, run_id, created_at
 ) VALUES (
   {message_id},
-  ${var:claim_id},
+  '${var:claim_id}',
   'SMS',
   '{to_phone}',
   '{body_text}',
