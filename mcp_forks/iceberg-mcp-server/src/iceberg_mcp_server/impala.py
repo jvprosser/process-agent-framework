@@ -37,64 +37,43 @@ def _jwt_access_token() -> str:
     return ""
 
 
-def _host_and_port() -> tuple[str, int, bool]:
+def _host_and_port() -> tuple[str, int]:
     """Bare coordinator host. A pasted http://host/ URL is not a DNS name."""
-    raw = os.getenv("IMPALA_HOST", "localhost").strip() or "localhost"
+    raw = os.getenv("IMPALA_HOST", "").strip()
     port_env = os.getenv("IMPALA_PORT", "").strip()
     if "://" not in raw:
-        host = raw.split("/", 1)[0]
-        return host, int(port_env or "21050"), False
+        host = (raw or "coordinator-default-impala.example.com").split("/", 1)[0]
+        return host, int(port_env or "443")
     parsed = urlparse(raw)
-    host = parsed.hostname or "localhost"
+    host = parsed.hostname or "coordinator-default-impala.example.com"
     if port_env:
         port = int(port_env)
     elif parsed.port:
         port = parsed.port
-    elif parsed.scheme == "https":
-        port = 443
     else:
-        port = 21050
-    return host, port, True
+        port = 443
+    return host, port
 
 
 def connection_kwargs() -> dict[str, Any]:
-    """Arguments for impyla.connect. Port 443 is the CDW TLS HTTP endpoint."""
-    host, port, from_url = _host_and_port()
-    tls = port == 443 or from_url
-    use_http = _env_bool("IMPALA_USE_HTTP_TRANSPORT", tls)
-    use_ssl = _env_bool("IMPALA_USE_SSL", port == 443)
-    user = os.getenv("IMPALA_USER", "").strip()
-    password = os.getenv("IMPALA_PASSWORD", "").strip()
-    token = _jwt_access_token()
-    auth = os.getenv("IMPALA_AUTH_MECHANISM", "").strip()
-    if not auth:
-        if token and use_http:
-            auth = "JWT"
-        elif user and password:
-            auth = "LDAP"
-        else:
-            auth = "NOSASL"
+    """Same Impala settings the claims MCP server read from the environment."""
+    host, port = _host_and_port()
+    auth = os.getenv("IMPALA_AUTH_MECHANISM", "LDAP").strip() or "LDAP"
     kwargs: dict[str, Any] = {
         "host": host,
         "port": port,
+        "database": os.getenv("IMPALA_DATABASE", "default"),
         "auth_mechanism": auth,
-        "use_ssl": use_ssl,
-        "use_http_transport": use_http,
+        "use_http_transport": _env_bool("IMPALA_USE_HTTP_TRANSPORT", True),
+        "http_path": os.getenv("IMPALA_HTTP_PATH", "cliservice"),
+        "use_ssl": _env_bool("IMPALA_USE_SSL", True),
     }
-    # Catalog SQL is fully qualified. Passing a database makes impyla issue
-    # USE before the statement, which fails closed when that database is absent.
-    database = os.getenv("IMPALA_DATABASE", "").strip()
-    if database:
-        kwargs["database"] = database
-    if use_http:
-        kwargs["http_path"] = os.getenv("IMPALA_HTTP_PATH", "cliservice")
-    if auth == "JWT":
-        kwargs["jwt"] = token
-    else:
-        if user:
-            kwargs["user"] = user
-        if password:
-            kwargs["password"] = password
+    if auth.upper() == "JWT":
+        kwargs["auth_mechanism"] = "JWT"
+        kwargs["jwt"] = _jwt_access_token()
+        return kwargs
+    kwargs["user"] = os.getenv("IMPALA_USER", "username")
+    kwargs["password"] = os.getenv("IMPALA_PASSWORD", "password")
     return kwargs
 
 
@@ -147,7 +126,7 @@ def _guard_http_client() -> dict[str, str]:
 
 
 def _failure(exc: BaseException, captured: dict[str, str]) -> RuntimeError:
-    host, port, _from_url = _host_and_port()
+    host, port = _host_and_port()
     auth = str(connection_kwargs().get("auth_mechanism") or "")
     message = f"{type(exc).__name__}: {exc}"
     detail = captured.get("detail", "")
