@@ -133,7 +133,7 @@ probes:
     title: Policy, vehicle, and coverage triangle
     when_true: Policy, vehicle, and coverage triangle is complete
     when_false: Policy, vehicle, or coverage triangle is incomplete
-    cel: 'triangle == true'
+    cel: 'policy_id > 0 && insurable_object_id > 0 && policy_covers_vehicle == true'
   R1.1:
     form: ASK
     title: Claim closed
@@ -389,7 +389,7 @@ actions:
       write: write_audit_event
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
-      tools: [get_deny_view, write_audit_event, promote_audit_run, save_claim_letter]
+      tools: [get_deny_view, write_audit_event, promote_audit_run, save_entry_artifact]
       terminal: true
   R5.2:
     - when: ASK_TRUE
@@ -409,7 +409,7 @@ actions:
       write: deny_claim
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
-      tools: [get_deny_view, deny_claim, save_claim_letter]
+      tools: [get_deny_view, deny_claim, save_entry_artifact]
       terminal: true
   R6.2:
     - when: ASK_TRUE
@@ -420,7 +420,7 @@ actions:
       write: deny_claim
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
-      tools: [get_deny_view, deny_claim, save_claim_letter]
+      tools: [get_deny_view, deny_claim, save_entry_artifact]
       terminal: true
   R6.3:
     - when: ASK_TRUE
@@ -431,7 +431,7 @@ actions:
       write: deny_claim
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
-      tools: [get_deny_view, deny_claim, save_claim_letter]
+      tools: [get_deny_view, deny_claim, save_entry_artifact]
       terminal: true
   R1.2a:
     - when: ASK_TRUE
@@ -460,7 +460,7 @@ actions:
       write: write_audit_event
       letter_on_request: true
       letter_note: A litigation hold/status letter is recommended. It will not be drafted unless you ask.
-      tools: [get_litigation_view, write_audit_event, save_claim_letter]
+      tools: [get_litigation_view, write_audit_event, save_entry_artifact]
   R5.1:
     - when: ASK_TRUE
       step: SiuInvestigation
@@ -485,7 +485,7 @@ actions:
       task_type_code: COLLECT_INCIDENT_NUMBER
       letter_on_request: false
       letter_note: An SMS was sent asking the policyholder to enter the incident report number in the app.
-      tools: [get_pd_view, create_pd_task, save_claim_letter]
+      tools: [get_pd_view, create_pd_task, save_entry_artifact]
   R2.0b:
     - when: ASK_TRUE
       step: WaitForIncidentNumber
@@ -506,7 +506,7 @@ actions:
       task_type_code: REQUEST_POLICE_REPORT
       letter_on_request: true
       letter_note: A police-report request letter for the incident report number is recommended. It will not be drafted unless you ask.
-      tools: [get_pd_view, create_pd_task, save_claim_letter]
+      tools: [get_pd_view, create_pd_task, save_entry_artifact]
   R2.2:
     - when: ASK_TRUE
       step: DetermineFault

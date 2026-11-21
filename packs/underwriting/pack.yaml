@@ -62,6 +62,32 @@ graph:
     - large_loss_needs_review
     - tenant_roster_present
     - tenant_roster_needs_review
+  strings:
+    - line_of_business
+    - class_code
+    - naics_code
+    - financial_stability_tier
+    - construction_type
+    - protection_class
+    - flood_zone
+    - low_ocr_spans
+    - rental_review_detail
+    - four_point_review_detail
+    - loss_run_review_detail
+    - large_loss_review_detail
+    - tenant_roster_review_detail
+  numbers:
+    - total_insured_value
+    - total_incurred_36m
+    - siu_score
+    - survey_age_months
+    - wind_tier
+    - year_built
+    - square_footage
+    - financial_score
+    - min_ocr_confidence
+    - sov_min_coinsurance_pct
+  lists: []
 catalog:
   mcp: iceberg-mcp-server-underwriting
   database: underwriting

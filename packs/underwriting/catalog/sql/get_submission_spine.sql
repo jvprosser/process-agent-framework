@@ -11,5 +11,5 @@ SELECT
   s.submission_timestamp,
   s.submission_status_code
 FROM ${var:database}.submissions s
-WHERE s.submission_id = ${var:submission_id}
+WHERE s.submission_id = ${var:claim_id}
 LIMIT 1

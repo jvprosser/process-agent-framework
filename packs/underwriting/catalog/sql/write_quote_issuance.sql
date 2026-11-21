@@ -23,4 +23,4 @@ SELECT
 FROM ${var:database}.submissions s
 LEFT JOIN ${var:database}.loss_history_summary l
   ON l.submission_id = s.submission_id
-WHERE s.submission_id = ${var:submission_id}
+WHERE s.submission_id = ${var:claim_id}

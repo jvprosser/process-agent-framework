@@ -107,7 +107,7 @@ def test_chat_envelope_routes_submission(monkeypatch, tmp_path: Path):
         "tool_invocations": [
             {
                 "label": "Draft Recommended Letter",
-                "intent": "save_claim_letter",
+                "intent": "save_entry_artifact",
                 "payload": {"entry_id": "9100"},
             }
         ],

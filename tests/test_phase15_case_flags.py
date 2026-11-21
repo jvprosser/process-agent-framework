@@ -33,8 +33,8 @@ def test_spine_row_sets_entry_exists_and_triangle():
 
     assert entry["entry_id"] == "401"
     assert entry["entry_exists"] is True
-    assert entry["triangle"] is True
-    assert entry["has_adjuster"] is True
+    assert "triangle" not in entry
+    assert "has_adjuster" not in entry
     assert entry["eval_date"]
     assert "claim_exists" not in entry
     assert "fnol_exists" not in entry
@@ -46,4 +46,4 @@ def test_empty_spine_does_not_invent_an_entry():
 
     assert entry["entry_id"] == "401"
     assert entry["entry_exists"] is False
-    assert entry["triangle"] is False
+    assert "triangle" not in entry

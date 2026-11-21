@@ -266,7 +266,7 @@ actions:
       write: write_submission_decline
       reason_code: OUT_OF_APPETITE
       letter_on_request: true
-      tools: [write_submission_decline, save_claim_letter]
+      tools: [write_submission_decline, save_entry_artifact]
       terminal: true
   P01_SANCTIONS_AND_OFAC_FLAG:
     - when: ASK_TRUE
@@ -287,7 +287,7 @@ actions:
       write: write_submission_decline
       reason_code: OUT_OF_APPETITE
       letter_on_request: true
-      tools: [write_submission_decline, save_claim_letter]
+      tools: [write_submission_decline, save_entry_artifact]
       terminal: true
   U0_ASSIGN_UNDERWRITER:
     - when: ASK_TRUE

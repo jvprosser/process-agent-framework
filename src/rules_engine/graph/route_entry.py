@@ -20,13 +20,15 @@ def route_entry(
     entry_id: int | str,
     *,
     playbook_path: str | Path | None = None,
+    pack_graph: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run playbook probes in priority order; return next step / agent / tools."""
     if not isinstance(entry, dict):
         raise TypeError("route_entry expects an entry JSON dict")
+    graph = pack_graph or {}
     playbook = _load_playbook(playbook_path)
     if playbook.get("exception_probes"):
-        return _route_with_exceptions(entry, entry_id, playbook)
+        return _route_with_exceptions(entry, entry_id, playbook, graph)
     priorities = list(playbook.get("priorities") or [])
     probes = playbook.get("probes") or {}
     matched: list[dict[str, Any]] = []
@@ -35,7 +37,7 @@ def route_entry(
         form = str(probe_cfg.get("form") or "ASK").upper()
         if str(probe_cfg.get("cel") or "").strip():
             form = "ASK"
-        result = _exec_probe(entry, probe_cfg, form)
+        result = _exec_probe(entry, probe_cfg, form, graph)
         action = _match_action(playbook, probe_id, form, result)
         assigned = action is not None
         matched.append(_trace_entry(probe_id, probe_cfg, form, result, assigned))
@@ -65,6 +67,7 @@ def _route_with_exceptions(
     entry: dict[str, Any],
     entry_id: int | str,
     playbook: dict[str, Any],
+    pack_graph: dict[str, Any],
 ) -> dict[str, Any]:
     """Score every exception probe, then first-match the disposition."""
     priorities = list(playbook.get("priorities") or [])
@@ -79,7 +82,7 @@ def _route_with_exceptions(
         form = str(probe_cfg.get("form") or "ASK").upper()
         if str(probe_cfg.get("cel") or "").strip():
             form = "ASK"
-        result = _exec_probe(entry, probe_cfg, form)
+        result = _exec_probe(entry, probe_cfg, form, pack_graph)
         action = _match_action(playbook, probe_id, form, result)
         probe = _trace_entry(probe_id, probe_cfg, form, result, action is not None)
         trace.append(probe)
@@ -219,10 +222,15 @@ def _load_playbook(playbook_path: str | Path | None) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def _exec_probe(entry: dict[str, Any], probe_cfg: dict[str, Any], form: str) -> Any:
+def _exec_probe(
+    entry: dict[str, Any],
+    probe_cfg: dict[str, Any],
+    form: str,
+    pack_graph: dict[str, Any],
+) -> Any:
     cel = probe_cfg.get("cel")
     if cel is not None and str(cel).strip():
-        return eval_cel(str(cel), entry)
+        return eval_cel(str(cel), entry, pack_graph)
     if form == "ASK":
         return eval_match(probe_cfg.get("match") or {}, entry)
     if form == "SELECT":

@@ -4,3 +4,31 @@ session_spine: get_claim_spine
 session_signals: get_claim_routing_signals
 ontology: ontology/claims.json
 playbook: playbook/playbook.yaml
+graph:
+  strings:
+    - docket_number
+    - filed_date
+    - closed_date
+    - served_date
+    - litigation_status_code
+    - incident_report_number
+    - loss_date
+    - effective_date
+    - expiration_date
+    - cancellation_date
+    - policy_status_code
+    - defense_counsel_party_id
+    - plaintiff_counsel_party_id
+    - intake_purpose_code
+    - triage_status_code
+  numbers:
+    - estimated_loss_amount
+    - deductible_amount
+  booleans:
+    - has_police_report
+    - inspection_completed
+  lists:
+    - coverage_type_codes
+    - insured_operators
+    - offers
+    - roles

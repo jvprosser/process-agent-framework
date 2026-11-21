@@ -10,10 +10,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from core.pack_manager import PackManager
-from core.tools import CORE_TOOLS, save_claim_letter
+from core.tools import CORE_TOOLS, save_entry_artifact
 
 _PACKS = Path(__file__).resolve().parents[2] / "packs"
-_TOOLS = {tool.name: tool for tool in (*CORE_TOOLS, save_claim_letter)}
+_TOOLS = {tool.name: tool for tool in (*CORE_TOOLS, save_entry_artifact)}
 
 router = APIRouter()
 

@@ -71,38 +71,6 @@ def _fill_missing_entry_flags(
     if not _present(entry.get("eval_date")):
         entry["eval_date"] = date.today().isoformat()
 
-    roles = entry.get("roles") if isinstance(entry.get("roles"), list) else spine.get("roles") or []
-    if entry.get("has_adjuster") is None:
-        entry["has_adjuster"] = any(
-            str((row or {}).get("role_type_code") or "").upper() == "ADJUSTER"
-            for row in roles
-            if isinstance(row, dict)
-        )
-
-    policy_id = entry.get("policy_id") if _present(entry.get("policy_id")) else spine.get("policy_id")
-    vehicle_id = (
-        entry.get("insurable_object_id")
-        if _present(entry.get("insurable_object_id"))
-        else spine.get("insurable_object_id")
-    )
-    covers = entry.get("policy_covers_vehicle")
-    if covers is None:
-        covers = spine.get("policy_covers_vehicle")
-    if covers is None:
-        covers = _present(policy_id) and _present(vehicle_id)
-    if entry.get("has_policy") is None:
-        entry["has_policy"] = _present(policy_id)
-    if entry.get("has_vehicle") is None:
-        entry["has_vehicle"] = _present(vehicle_id)
-    if entry.get("policy_covers_vehicle") is None:
-        entry["policy_covers_vehicle"] = _as_bool(covers)
-    if entry.get("triangle") is None:
-        entry["triangle"] = bool(
-            entry.get("has_policy")
-            and entry.get("has_vehicle")
-            and _as_bool(entry.get("policy_covers_vehicle"))
-        )
-
 
 def _field_names(mapping_or_list: Any) -> list[str]:
     if isinstance(mapping_or_list, dict):

@@ -11,103 +11,9 @@ from celpy.evaluation import CELEvalError
 
 _ENV = celpy.Environment()
 _PROGRAMS: dict[str, Any] = {}
-_LIST_KEYS = (
-    "coverage_type_codes",
-    "insured_operators",
-    "offers",
-    "hardship_reason_codes",
-    "pending_court_orders",
-    "roles",
-)
-_STR_KEYS = (
-    "docket_number",
-    "filed_date",
-    "closed_date",
-    "served_date",
-    "litigation_status_code",
-    "incident_report_number",
-    "loss_date",
-    "effective_date",
-    "expiration_date",
-    "cancellation_date",
-    "policy_status_code",
-    "defense_counsel_party_id",
-    "plaintiff_counsel_party_id",
-    "hardship_category",
-    "participant_marital_status",
-    "distribution_type_code",
-    "request_status_code",
-    "line_of_business",
-    "class_code",
-    "naics_code",
-    "financial_stability_tier",
-    "construction_type",
-    "protection_class",
-    "flood_zone",
-    "low_ocr_spans",
-    "rental_review_detail",
-    "four_point_review_detail",
-    "loss_run_review_detail",
-    "large_loss_review_detail",
-    "tenant_roster_review_detail",
-    "intake_purpose_code",
-    "triage_status_code",
-)
-_NUM_KEYS = (
-    "rmd_shortfall_amount",
-    "requested_amount",
-    "documented_financial_need_amount",
-    "estimated_tax_withholding_amount",
-    "available_plan_loan_capacity",
-    "prior_emergency_distributions_this_year",
-    "estimated_loss_amount",
-    "deductible_amount",
-    "total_insured_value",
-    "total_incurred_36m",
-    "siu_score",
-    "survey_age_months",
-    "wind_tier",
-    "year_built",
-    "square_footage",
-    "financial_score",
-    "min_ocr_confidence",
-    "sov_min_coinsurance_pct",
-)
-_BOOL_KEYS = (
-    "hold_or_aml_flag",
-    "has_participant_self_certified",
-    "requires_substantiation_audit",
-    "plan_subject_to_qjsa",
-    "plan_mandates_loan_exhaustion",
-    "spousal_consent_verified",
-    "has_active_qdro_hold",
-    "is_in_flood_plain",
-    "has_open_loss_past_36m",
-    "inspection_completed",
-    "has_underwriter",
-    "has_ofac_match",
-    "tax_lien_unresolved",
-    "has_survey_on_file",
-    "has_recent_cat_run",
-    "wiring_updated",
-    "has_sprinklers",
-    "ocr_document_present",
-    "sov_present",
-    "sov_schedule_incomplete",
-    "rental_worksheet_present",
-    "rental_needs_review",
-    "four_point_present",
-    "four_point_needs_review",
-    "loss_run_present",
-    "loss_run_needs_review",
-    "large_loss_present",
-    "large_loss_needs_review",
-    "tenant_roster_present",
-    "tenant_roster_needs_review",
-)
 
 
-def flatten_entry(entry: dict[str, Any]) -> dict[str, Any]:
+def flatten_entry(entry: dict[str, Any], pack_graph: dict[str, Any]) -> dict[str, Any]:
     """Lift nested signals onto the root the same way YAML get_path did."""
     out = {k: v for k, v in entry.items() if k != "signals"}
     nested = entry.get("signals")
@@ -124,16 +30,20 @@ def flatten_entry(entry: dict[str, Any]) -> dict[str, Any]:
                         out[key] = val
                     elif cur is None:
                         out[key] = val
-    for key in _LIST_KEYS:
+    list_keys = pack_graph.get("lists") or []
+    str_keys = pack_graph.get("strings") or []
+    num_keys = pack_graph.get("numbers") or []
+    bool_keys = pack_graph.get("booleans") or []
+    for key in list_keys:
         if not isinstance(out.get(key), list):
             out[key] = []
-    for key in _STR_KEYS:
+    for key in str_keys:
         value = out.get(key)
         if value in (None,):
             out[key] = ""
         elif not isinstance(value, (list, dict, bool)):
             out[key] = str(value).strip()
-    for key in _NUM_KEYS:
+    for key in num_keys:
         raw = out.get(key)
         if isinstance(raw, bool) or raw in (None, ""):
             out[key] = 0.0
@@ -144,7 +54,7 @@ def flatten_entry(entry: dict[str, Any]) -> dict[str, Any]:
                 out[key] = float(raw)
             except (TypeError, ValueError):
                 out[key] = 0.0
-    for key in _BOOL_KEYS:
+    for key in bool_keys:
         value = out.get(key)
         if value in (None, ""):
             out[key] = False
@@ -165,10 +75,10 @@ def compile_cel(expr: str) -> Any:
     return program
 
 
-def eval_cel(expr: str, entry: dict[str, Any]) -> bool:
+def eval_cel(expr: str, entry: dict[str, Any], pack_graph: dict[str, Any]) -> bool:
     """Return True when the CEL expression is true on the flattened entry."""
     program = compile_cel(expr)
-    activation = json_to_cel(flatten_entry(entry))
+    activation = json_to_cel(flatten_entry(entry, pack_graph))
     try:
         result = program.evaluate(activation)
     except CELEvalError:

@@ -218,6 +218,7 @@ def _distribution(monkeypatch, entity: str) -> tuple[dict, dict]:
         case,
         entity,
         playbook_path=PackManager.active().playbook_path,
+        pack_graph=dict(PackManager.active().manifest.get("graph") or {}),
     )
     return decision, legacy
 
@@ -247,6 +248,7 @@ def test_playbook_matches_legacy_seed(seed, snapshot, expected, monkeypatch, tmp
             case,
             seed,
             playbook_path=PackManager.active().playbook_path,
+            pack_graph=dict(PackManager.active().manifest.get("graph") or {}),
         )
     assert decision["next_step"] == expected
     for key in _PARITY:
@@ -259,15 +261,15 @@ def test_action_writes_claim_letter(monkeypatch, tmp_path):
         "/api/v1/action",
         json={
             "pack_id": "underwriting",
-            "intent": "save_claim_letter",
+            "intent": "save_entry_artifact",
             "payload": {"entry_id": "401"},
         },
     )
     assert response.status_code == 200
-    assert response.json() == {"status": "success", "artifact": "claim_401_letter.txt"}
-    text = (tmp_path / "claim_401_letter.txt").read_text(encoding="utf-8")
+    assert response.json() == {"status": "success", "artifact": "entry_401_letter.txt"}
+    text = (tmp_path / "entry_401_letter.txt").read_text(encoding="utf-8")
     assert "401" in text
-    assert not (tmp_path / "claim_401_sms.txt").exists()
+    assert not (tmp_path / "entry_401_sms.txt").exists()
 
 
 def test_action_writes_sms_for_incident_step(monkeypatch, tmp_path):
@@ -276,14 +278,14 @@ def test_action_writes_sms_for_incident_step(monkeypatch, tmp_path):
         "/api/v1/action",
         json={
             "pack_id": "underwriting",
-            "intent": "save_claim_letter",
+            "intent": "save_entry_artifact",
             "payload": {
                 "entry_id": "401",
-                "letter_type": "CollectIncidentReportNumber",
+                "artifact_type": "sms",
             },
         },
     )
     assert response.status_code == 200
-    assert response.json()["artifact"] == "claim_401_sms.txt"
-    assert (tmp_path / "claim_401_sms.txt").is_file()
-    assert not (tmp_path / "claim_401_letter.txt").exists()
+    assert response.json()["artifact"] == "entry_401_sms.txt"
+    assert (tmp_path / "entry_401_sms.txt").is_file()
+    assert not (tmp_path / "entry_401_letter.txt").exists()

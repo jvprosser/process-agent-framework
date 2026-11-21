@@ -89,7 +89,7 @@ def _actions(route: dict[str, Any] | None, entity_id: str | None) -> Actions:
         tool_invocations=[
             {
                 "label": "Draft Recommended Letter",
-                "intent": "save_claim_letter",
+                "intent": "save_entry_artifact",
                 "payload": {"entry_id": entity_id},
             }
         ],

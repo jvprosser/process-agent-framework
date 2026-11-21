@@ -27,6 +27,21 @@ graph:
     - plan_mandates_loan_exhaustion
     - spousal_consent_verified
     - has_active_qdro_hold
+  strings:
+    - hardship_category
+    - participant_marital_status
+    - distribution_type_code
+    - request_status_code
+  numbers:
+    - rmd_shortfall_amount
+    - requested_amount
+    - documented_financial_need_amount
+    - estimated_tax_withholding_amount
+    - available_plan_loan_capacity
+    - prior_emergency_distributions_this_year
+  lists:
+    - hardship_reason_codes
+    - pending_court_orders
 catalog:
   mcp: iceberg-mcp-server-finserv
   database: retirement_distributions

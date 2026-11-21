@@ -89,7 +89,7 @@ def test_tools_are_native_and_route_from_the_playbook(monkeypatch, tmp_path: Pat
     assert decision["agent_role"] == "UnderwritingIntakeSpecialist"
     assert decision["allowed_tools"] == [
         "write_submission_decline",
-        "save_claim_letter",
+        "save_entry_artifact",
     ]
 
     queried = tools.run_named_query("get_submission_spine", {"claim_id": "9100"})

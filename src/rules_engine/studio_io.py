@@ -25,7 +25,7 @@ def session_dir() -> Path:
 
 
 def configure_workflow_assets(assets_root: str | None = None) -> Path:
-    """Point ``INS_CLAIMS_REPO_ROOT`` / ``PACK_ROOT`` at a pack."""
+    """Point ``PACK_ROOT`` at a pack."""
     from rules_engine.pack import is_pack_root
     from rules_engine.paths import repo_root
 
@@ -40,7 +40,6 @@ def configure_workflow_assets(assets_root: str | None = None) -> Path:
 
     if not is_pack_root(root):
         raise FileNotFoundError(f"Assets root missing pack.yaml: {root}.")
-    os.environ["INS_CLAIMS_REPO_ROOT"] = str(root)
     os.environ["PACK_ROOT"] = str(root)
     return root
 
@@ -58,43 +57,32 @@ def decision_artifact_path(entry_id: str | int) -> Path:
     return session_dir() / f"entry_{entry_id}_route.json"
 
 
-def letter_artifact_path(claim_id: str | int) -> Path:
-    """Session hold/status letter (R1.2 LitigationSupport)."""
-    return session_dir() / f"claim_{_safe_claim_id(claim_id)}_letter.txt"
+def artifact_path(entry_id: str | int, artifact_type: str = "letter") -> Path:
+    """Session artifact. The type is the filename suffix, such as letter or sms."""
+    return session_dir() / f"entry_{_safe_entry_id(entry_id)}_{_safe_artifact_type(artifact_type)}.txt"
 
 
-def sms_artifact_path(claim_id: str | int) -> Path:
-    """Session SMS copy (R2.0 CollectIncidentReportNumber)."""
-    return session_dir() / f"claim_{_safe_claim_id(claim_id)}_sms.txt"
-
-
-def save_claim_letter(
-    claim_id: str | int,
+def save_entry_artifact(
+    entry_id: str | int,
     body: str,
     *,
+    artifact_type: str = "letter",
     run_id: str | None = None,
-    next_step: str = "LitigationSupport",
 ) -> dict[str, Any]:
-    """Write drafted letter or SMS copy to SESSION_DIRECTORY. Does not send."""
+    """Write a drafted artifact to SESSION_DIRECTORY. Does not send it."""
     text = (body or "").strip()
     if not text:
-        raise ValueError("body is required (drafted letter text)")
+        raise ValueError("body is required (drafted artifact text)")
     if not text.endswith("\n"):
         text = text + "\n"
-    step = next_step or "LitigationSupport"
-    path = (
-        sms_artifact_path(claim_id)
-        if step == "CollectIncidentReportNumber"
-        else letter_artifact_path(claim_id)
-    )
+    kind = _safe_artifact_type(artifact_type)
+    path = artifact_path(entry_id, kind)
     write_text_artifact(path, text)
-    key = "sms_artifact" if step == "CollectIncidentReportNumber" else "letter_artifact"
     return {
-        "claim_id": _safe_claim_id(claim_id),
+        "entry_id": _safe_entry_id(entry_id),
+        "artifact_type": kind,
         "run_id": run_id,
-        "next_step": step,
-        key: str(path.resolve()),
-        "letter_artifact": str(path.resolve()),
+        "artifact": str(path.resolve()),
         "session_directory": str(session_dir()),
         "bytes": path.stat().st_size,
     }
@@ -107,11 +95,16 @@ def write_text_artifact(path: Path, text: str) -> str:
     return str(path.resolve())
 
 
-def _safe_claim_id(claim_id: str | int) -> str:
-    cid = str(claim_id).strip()
-    if not cid or any(part in cid for part in ("/", "\\", "..")):
-        raise ValueError("claim_id is not a safe artifact name")
-    return cid
+def _safe_entry_id(entry_id: str | int) -> str:
+    eid = str(entry_id).strip()
+    if not eid or any(part in eid for part in ("/", "\\", "..")):
+        raise ValueError("entry_id is not a safe artifact name")
+    return eid
+
+
+def _safe_artifact_type(artifact_type: str) -> str:
+    token = "".join(ch for ch in str(artifact_type).lower() if ch.isalnum())
+    return token or "letter"
 
 
 def write_json_artifact(path: Path, data: Any) -> str:
@@ -155,10 +148,6 @@ def normalize_spine_payload(raw: Any) -> dict[str, Any]:
         raise ValueError(str(payload["error"]))
     if isinstance(payload.get("spine"), dict):
         spine = dict(payload["spine"])
-        if "roles" not in spine:
-            spine["roles"] = list(payload.get("roles") or [])
-        if "claim_id" not in spine and payload.get("claim_id") is not None:
-            spine["claim_id"] = payload["claim_id"]
         return spine
     return payload
 
@@ -171,16 +160,5 @@ def normalize_signals_payload(raw: Any) -> dict[str, Any]:
     if payload.get("error") and "signals" not in payload:
         raise ValueError(str(payload["error"]))
     if isinstance(payload.get("signals"), dict):
-        out = dict(payload["signals"])
-        for key in (
-            "injury_ids",
-            "offers",
-            "insured_operators",
-            "payment_ids",
-            "recovery_ids",
-            "document_ids",
-        ):
-            if key in payload and key not in out:
-                out[key] = payload[key]
-        return out
+        return dict(payload["signals"])
     return payload

@@ -17,6 +17,10 @@ graph:
   booleans:
     - missing_spousal_consent
     - missing_required_docs
+  strings:
+    - request_status_code
+  numbers: []
+  lists: []
 catalog:
   fixture_writes: true
   reads:

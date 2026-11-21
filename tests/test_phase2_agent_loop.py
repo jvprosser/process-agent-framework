@@ -93,7 +93,7 @@ def test_intake_returns_playbook_route_not_the_model_text(monkeypatch, tmp_path:
     assert route["write"] == "write_submission_decline"
     assert route["allowed_tools"] == [
         "write_submission_decline",
-        "save_claim_letter",
+        "save_entry_artifact",
     ]
     offered = client.chat.complete_calls[0]["tools"]
     assert [tool["function"]["name"] for tool in offered] == [

@@ -1,22 +1,22 @@
 # Underwriting named catalog. sql: a file of one or more Impala statements.
-# submission_id is the BIGINT surrogate. The app may pass it as claim_id.
+# The session id parameter is claim_id. SQL compares it to the submission_id column.
 version: 1
 database: underwriting
 
 reads:
   get_submission_spine:
-    required: [submission_id]
-    optional: [database, claim_id, entry_id]
+    required: [claim_id]
+    optional: [database]
     summary: Submission spine for graph build
     sql: sql/get_submission_spine.sql
   get_submission_routing_signals:
-    required: [submission_id]
-    optional: [database, claim_id, entry_id]
+    required: [claim_id]
+    optional: [database]
     summary: Flood, inspection, loss, and stability signals for CEL
     sql: sql/get_submission_routing_signals.sql
   get_senior_uw_referral_context:
-    required: [submission_id]
-    optional: [database, claim_id, entry_id]
+    required: [claim_id]
+    optional: [database]
     summary: Senior underwriter referral context
     sql: sql/get_senior_uw_referral_context.sql
   list_underwriter_open_submissions:
@@ -25,8 +25,8 @@ reads:
     summary: Open submissions currently assigned to an underwriter
     sql: sql/list_underwriter_open_submissions.sql
   list_low_confidence_fields:
-    required: [submission_id]
-    optional: [database, claim_id, entry_id, min_confidence_score]
+    required: [claim_id]
+    optional: [database, min_confidence_score]
     summary: Fields whose scanned words are below the default confidence 0.8
     sql: sql/list_low_confidence_fields.sql
   get_schema:
@@ -38,37 +38,37 @@ reads:
 writes:
   write_submission_decline:
     required: [run_id, event_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Decline a submission (reason_code OUT_OF_APPETITE) and audit it
     sql: sql/write_submission_decline.sql
   write_quote_issuance:
     required: [run_id, event_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Issue an indicative quote. SQL computes tier and premium_cents
     sql: sql/write_quote_issuance.sql
   write_data_enrichment_request:
     required: [run_id, event_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Request an inspection (provider_type INSPECTION) and audit it
     sql: sql/write_data_enrichment_request.sql
   write_referral_queue:
     required: [run_id, event_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Queue a senior underwriter referral and audit it
     sql: sql/write_referral_queue.sql
   write_audit_event:
     required: [run_id, event_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Insert one audit event
     sql: sql/write_audit_event.sql
   append_agent_audit_event:
     required: [run_id, event_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Insert one audit event
     sql: sql/write_audit_event.sql
   append_agent_audit_evidence:
     required: [run_id, evidence_json]
-    optional: [database, submission_id, claim_id, entry_id]
+    optional: [database, claim_id]
     summary: Insert one audit evidence row
     sql: sql/append_agent_audit_evidence.sql
   begin_agent_audit_run:

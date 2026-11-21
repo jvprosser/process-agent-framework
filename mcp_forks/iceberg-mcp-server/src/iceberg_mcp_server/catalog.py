@@ -150,28 +150,24 @@ def _log_rows(label: str, ran: list[dict[str, Any]]) -> None:
 
 def _bind(catalog: dict[str, Any], spec: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     bound = {str(key): value for key, value in params.items() if value not in (None, "")}
-    if not bound.get("claim_id") and bound.get("case_id"):
-        bound["claim_id"] = bound["case_id"]
-    if not bound.get("submission_id"):
-        bound["submission_id"] = bound.get("claim_id") or bound.get("entry_id")
     if "database" not in bound:
         bound["database"] = catalog.get("database") or os.getenv("IMPALA_DATABASE", "default")
     allowed = set(spec.get("required") or []) | set(spec.get("optional") or [])
-    allowed.update({"database", "claim_id", "case_id", "fnol_id", "party_id", "submission_id"})
+    allowed.add("database")
     extra = sorted(key for key in bound if key not in allowed)
     if extra:
         raise ValueError("unknown params: " + ", ".join(extra))
     database = str(bound["database"])
     if not _IDENT.match(database):
         raise ValueError("invalid database")
-    for key in ("claim_id", "fnol_id", "party_id", "submission_id", "case_id"):
-        if key in bound:
-            text = str(bound[key]).strip()
-            if key == "fnol_id" and text.upper().startswith("FNOL-"):
-                text = text.rsplit("-", 1)[-1]
-            if not text.isdigit():
-                raise ValueError(f"invalid {key}")
+    for key, value in list(bound.items()):
+        if key == "database":
+            continue
+        text = str(value).strip()
+        if text.isdigit():
             bound[key] = str(int(text))
+        else:
+            bound[key] = text
     return bound
 
 
@@ -272,13 +268,6 @@ def _values(bound: dict[str, Any]) -> dict[str, Any]:
         if isinstance(payload, dict):
             for field, value in payload.items():
                 values.setdefault(str(field), value)
-    if values.get("claim_id") in (None, "") and values.get("case_id") not in (None, ""):
-        values["claim_id"] = values["case_id"]
-    if values.get("submission_id") in (None, ""):
-        for key in ("claim_id", "entry_id", "entity_id"):
-            if values.get(key) not in (None, ""):
-                values["submission_id"] = values[key]
-                break
     return values
 
 

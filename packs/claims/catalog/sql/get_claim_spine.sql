@@ -19,6 +19,23 @@ SELECT
   c.insurable_object_id,
   v.vin,
   CASE WHEN pio.policy_id IS NOT NULL THEN TRUE ELSE FALSE END AS policy_covers_vehicle,
+  CASE
+    WHEN c.policy_id IS NOT NULL
+     AND c.insurable_object_id IS NOT NULL
+     AND pio.policy_id IS NOT NULL
+    THEN TRUE
+    ELSE FALSE
+  END AS triangle,
+  CASE
+    WHEN EXISTS (
+      SELECT 1
+      FROM ${var:database}.claim_party_role adj
+      WHERE adj.claim_id = c.claim_id
+        AND adj.is_current_assignment = TRUE
+        AND UPPER(adj.role_type_code) = 'ADJUSTER'
+    ) THEN TRUE
+    ELSE FALSE
+  END AS has_adjuster,
   c.policy_coverage_id,
   cov.coverage_type_code,
   cl.claim_lifecycle_id

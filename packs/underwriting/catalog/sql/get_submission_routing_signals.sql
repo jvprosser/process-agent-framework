@@ -433,5 +433,5 @@ LEFT JOIN (
   GROUP BY u.submission_id
 ) tm
   ON tm.submission_id = s.submission_id
-WHERE s.submission_id = ${var:submission_id}
+WHERE s.submission_id = ${var:claim_id}
 LIMIT 1

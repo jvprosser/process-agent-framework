@@ -18,19 +18,18 @@ def _find_repo_root() -> Path:
     """Locate a pack.yaml or ontology/ + playbook/ tree.
 
     Order:
-    1. ``PACK_ROOT`` / ``INS_CLAIMS_REPO_ROOT``
+    1. ``PACK_ROOT``
     2. ``WORKFLOW_DATA_DIRECTORY``
     3. Walk upward from this package
     """
-    for key in ("PACK_ROOT", "INS_CLAIMS_REPO_ROOT"):
-        env = os.environ.get(key)
-        if env:
-            candidate = Path(env).expanduser().resolve()
-            if _has_assets(candidate):
-                return candidate
-            raise FileNotFoundError(
-                f"{key}={candidate} missing pack.yaml or ontology/ + playbook/"
-            )
+    env = os.environ.get("PACK_ROOT")
+    if env:
+        candidate = Path(env).expanduser().resolve()
+        if _has_assets(candidate):
+            return candidate
+        raise FileNotFoundError(
+            f"PACK_ROOT={candidate} missing pack.yaml or ontology/ + playbook/"
+        )
 
     wf = os.environ.get("WORKFLOW_DATA_DIRECTORY")
     if wf:
@@ -43,7 +42,7 @@ def _find_repo_root() -> Path:
             return candidate
     raise FileNotFoundError(
         "Could not locate pack.yaml "
-        "(set WORKFLOW_DATA_DIRECTORY, PACK_ROOT, or INS_CLAIMS_REPO_ROOT)"
+        "(set WORKFLOW_DATA_DIRECTORY or PACK_ROOT)"
     )
 
 

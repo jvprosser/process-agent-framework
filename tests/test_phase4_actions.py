@@ -57,7 +57,7 @@ def _execute(op, label, params, manager):
 
 
 def _route(letter: bool) -> dict:
-    tools = ["get_pd_view", "create_pd_task", "save_claim_letter"]
+    tools = ["get_pd_view", "create_pd_task", "save_entry_artifact"]
     if not letter:
         tools = ["create_pd_task"]
     return {
@@ -102,7 +102,7 @@ def test_view_label_and_letter_actions(monkeypatch):
     assert body["actions"]["tool_invocations"] == [
         {
             "label": "Draft Recommended Letter",
-            "intent": "save_claim_letter",
+            "intent": "save_entry_artifact",
             "payload": {"entry_id": "401"},
         }
     ]

@@ -112,6 +112,7 @@ def evaluate_playbook() -> dict:
         entry,
         _session_entity_id,
         playbook_path=manager.playbook_path,
+        pack_graph=dict(manager.manifest.get("graph") or {}),
     )
     route = {
         "entity_id": _session_entity_id,
@@ -197,8 +198,6 @@ def _as_graph_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
     object_row = dict(rows[0]) if rows and isinstance(rows[0], dict) else {}
     shaped = dict(payload)
     shaped[key] = object_row
-    if key == "spine" and isinstance(payload.get("roles"), list):
-        object_row["roles"] = payload["roles"]
     return shaped
 
 
@@ -226,33 +225,23 @@ def _project_ontology_fields(entry: dict[str, Any], field_names: list[str]) -> N
         entry.setdefault(name, None)
 
 
-_SMS_LETTER_TYPES = frozenset({"sms", "collectincidentreportnumber"})
-
-
 @tool
-def save_claim_letter(entry_id: str, letter_type: str = "letter") -> dict:
-    """Write a drafted letter or SMS copy into the session directory. Does not send it."""
+def save_entry_artifact(entry_id: str, artifact_type: str = "letter") -> dict:
+    """Write a drafted entry artifact into the session directory. Does not send it."""
     from rules_engine.studio_io import session_dir, write_text_artifact
 
     entity = str(entry_id).strip()
     if not entity or any(part in entity for part in ("/", "\\", "..")):
         raise ValueError("entry_id is not a safe artifact name")
-    kind = "sms" if _is_sms(letter_type) else "letter"
-    filename = f"claim_{entity}_{kind}.txt"
-    heading = "SMS draft" if kind == "sms" else "Letter draft"
+    kind = "".join(ch for ch in str(artifact_type).lower() if ch.isalnum()) or "letter"
+    filename = f"entry_{entity}_{kind}.txt"
     body = (
-        f"{heading}\n"
+        f"{kind} draft\n"
         f"Entity: {entity}\n"
-        f"Letter type: {letter_type}\n"
         "Saved locally. Not sent.\n"
     )
     write_text_artifact(session_dir() / filename, body)
     return {"status": "success", "artifact": filename}
-
-
-def _is_sms(letter_type: str) -> bool:
-    token = "".join(ch for ch in str(letter_type).lower() if ch.isalnum())
-    return token in _SMS_LETTER_TYPES
 
 
 CORE_TOOLS = (
