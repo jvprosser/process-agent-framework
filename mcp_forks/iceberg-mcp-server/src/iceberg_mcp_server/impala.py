@@ -77,11 +77,15 @@ def connection_kwargs() -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "host": host,
         "port": port,
-        "database": os.getenv("IMPALA_DATABASE", "default"),
         "auth_mechanism": auth,
         "use_ssl": use_ssl,
         "use_http_transport": use_http,
     }
+    # Catalog SQL is fully qualified. Passing a database makes impyla issue
+    # USE before the statement, which fails closed when that database is absent.
+    database = os.getenv("IMPALA_DATABASE", "").strip()
+    if database:
+        kwargs["database"] = database
     if use_http:
         kwargs["http_path"] = os.getenv("IMPALA_HTTP_PATH", "cliservice")
     if auth == "JWT":
@@ -97,7 +101,59 @@ def connection_kwargs() -> dict[str, Any]:
 def _connect():
     from impala.dbapi import connect
 
+    _guard_http_client()
     return connect(**connection_kwargs())
+
+
+def _guard_http_client() -> dict[str, str]:
+    """impyla's HTTP close() raises if the socket was never opened, hiding the real error."""
+    from impala._thrift_api import ImpalaHttpClient
+
+    captured = getattr(ImpalaHttpClient, "_paf_capture", None)
+    if not isinstance(captured, dict):
+        captured = {}
+        ImpalaHttpClient._paf_capture = captured
+    if getattr(ImpalaHttpClient, "_paf_guarded", False):
+        return captured
+
+    def close(self):
+        http = getattr(self, "_ImpalaHttpClient__http", None)
+        if http is not None:
+            http.close()
+        self._ImpalaHttpClient__http = None
+        self._ImpalaHttpClient__http_response = None
+
+    original_flush = ImpalaHttpClient.flush
+
+    def flush(self):
+        try:
+            return original_flush(self)
+        except Exception as exc:
+            body = getattr(exc, "body", b"")
+            if isinstance(body, bytes):
+                body = body.decode("utf-8", "replace")
+            text = f"{type(exc).__name__}: {exc}"
+            if body:
+                text += f" body={body[:500]}"
+            box = getattr(ImpalaHttpClient, "_paf_capture", None)
+            if isinstance(box, dict):
+                box["detail"] = text
+            raise
+
+    ImpalaHttpClient.close = close
+    ImpalaHttpClient.flush = flush
+    ImpalaHttpClient._paf_guarded = True
+    return captured
+
+
+def _failure(exc: BaseException, captured: dict[str, str]) -> RuntimeError:
+    host, port, _from_url = _host_and_port()
+    auth = str(connection_kwargs().get("auth_mechanism") or "")
+    message = f"{type(exc).__name__}: {exc}"
+    detail = captured.get("detail", "")
+    if detail and detail not in message:
+        message = f"{message}; {detail}"
+    return RuntimeError(f"{message} (host={host} port={port} auth={auth})")
 
 
 _QUERY_PREFIXES = ("select", "with", "show", "describe")
@@ -112,30 +168,50 @@ def _fetch(cursor) -> list[dict[str, Any]]:
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
-def query_rows(sql: str) -> list[dict[str, Any]]:
-    conn = _connect()
+def _safe_close(conn: Any) -> None:
+    if conn is None:
+        return
     try:
+        conn.close()
+    except Exception:
+        return
+
+
+def _using(work):
+    captured = _guard_http_client()
+    conn = None
+    try:
+        conn = _connect()
+        try:
+            return work(conn)
+        finally:
+            _safe_close(conn)
+    except Exception as exc:
+        raise _failure(exc, captured) from exc
+
+
+def query_rows(sql: str) -> list[dict[str, Any]]:
+    def work(conn):
         cursor = conn.cursor()
         cursor.execute(sql)
         return _fetch(cursor)
-    finally:
-        conn.close()
+
+    return _using(work)
 
 
 def execute_dml(sql: str) -> str:
-    conn = _connect()
-    try:
+    def work(conn):
         cursor = conn.cursor()
         cursor.execute(sql)
         return "ok"
-    finally:
-        conn.close()
+
+    return _using(work)
 
 
 def run_statements(statements: list[str]) -> list[dict[str, Any]]:
     """Run every statement on one Impala connection, in order."""
-    conn = _connect()
-    try:
+
+    def work(conn):
         cursor = conn.cursor()
         results: list[dict[str, Any]] = []
         for sql in statements:
@@ -145,5 +221,5 @@ def run_statements(statements: list[str]) -> list[dict[str, Any]]:
             else:
                 results.append({"kind": "write", "message": "ok"})
         return results
-    finally:
-        conn.close()
+
+    return _using(work)

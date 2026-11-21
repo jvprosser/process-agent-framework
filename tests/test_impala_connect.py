@@ -41,6 +41,7 @@ def test_cdw_url_uses_the_hostname_and_the_workbench_jwt(monkeypatch, tmp_path: 
     assert kwargs["auth_mechanism"] == "JWT"
     assert kwargs["jwt"] == "workload-jwt"
     assert "user" not in kwargs
+    assert "database" not in kwargs
 
 
 def test_local_impala_stays_on_nosasl(monkeypatch):
@@ -57,3 +58,18 @@ def test_local_impala_stays_on_nosasl(monkeypatch):
     assert kwargs["auth_mechanism"] == "NOSASL"
     assert kwargs["use_http_transport"] is False
     assert kwargs["use_ssl"] is False
+
+
+def test_connection_failure_keeps_the_http_error(monkeypatch):
+    monkeypatch.setenv("IMPALA_HOST", COORDINATOR)
+    monkeypatch.setenv("IMPALA_PORT", "443")
+    monkeypatch.delenv("IMPALA_AUTH_MECHANISM", raising=False)
+    monkeypatch.setattr(impala, "_JWT_PATH", Path("/no/such/jwt"))
+    error = impala._failure(
+        AttributeError("'NoneType' object has no attribute 'close'"),
+        {"detail": "HttpError: HTTP 401 Unauthorized body=Authentication failed"},
+    )
+    text = str(error)
+    assert "HttpError: HTTP 401 Unauthorized" in text
+    assert "coordinator-default-impala-aws.dw-go01-demo-aws.ylcu-atmi.cloudera.site" in text
+    assert "port=443" in text
