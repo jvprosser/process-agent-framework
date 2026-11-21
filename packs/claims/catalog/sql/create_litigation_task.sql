@@ -4,7 +4,7 @@ INSERT INTO ${var:database}.litigation_task (
 ) VALUES (
   {litigation_task_id},
   {litigation_case_id},
-  '${var:claim_id}',
+  ${var:claim_id},
   '{task_type_code}',
   'OPEN',
   CAST('{due_date}' AS DATE),

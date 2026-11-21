@@ -4,7 +4,7 @@ INSERT INTO ${var:database}.agent_run_evidence (
 ) VALUES (
   '{run_id}',
   CURRENT_TIMESTAMP(),
-  '${var:claim_id}',
+  ${var:claim_id},
   '{evidence_type}',
   '{probe_id}',
   '{content_format}',

@@ -94,7 +94,8 @@ def test_get_claim_spine_logs_the_rendered_sql(capsys):
     )
 
     err = capsys.readouterr().err
-    assert any("claim_id = '401'" in sql for sql in seen)
+    assert any("claim_id = 401" in sql and "claim_id = '401'" not in sql for sql in seen)
     assert "iceberg-mcp-server SQL [get_claim_spine]:" in err
-    assert "claim_id = '401'" in err
+    assert "claim_id = 401" in err
+    assert "claim_id = '401'" not in err
     assert "iceberg-mcp-server rows [get_claim_spine]: 1" in err

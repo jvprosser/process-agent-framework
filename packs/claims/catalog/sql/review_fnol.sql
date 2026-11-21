@@ -1,6 +1,6 @@
 -- result: review
 UPDATE ${var:database}.fnol SET triage_status_code = 'ADJUSTER_REVIEW'
-WHERE fnol_id = '${var:fnol_id}'
+WHERE fnol_id = ${var:fnol_id}
   AND UPPER(COALESCE(triage_status_code, '')) IN ('OPEN', 'ADJUSTER_REVIEW');
 
 -- result: audit
@@ -10,7 +10,7 @@ INSERT INTO ${var:database}.agent_run_audit (
 ) VALUES (
   '{run_id}',
   CURRENT_TIMESTAMP(),
-  '${var:claim_id}',
+  ${var:claim_id},
   '{event_type}',
   '{next_step}',
   '{agent_role}',

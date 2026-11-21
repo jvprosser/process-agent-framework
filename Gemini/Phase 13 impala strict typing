@@ -1,0 +1,41 @@
+Ah, the classic Impala strict typing trap—which I walked us right into.
+
+In Phase 12, I instructed you to wrap the `claim_id` variable in quotes, assuming the Iceberg column was a `STRING`. The `AnalysisException` explicitly reveals that `c.claim_id` is actually a `BIGINT`. Impala does not implicitly cast strings to integers for comparisons; comparing a `BIGINT` column to a `STRING` literal (`'401'`) causes a fatal query analysis failure.
+
+Here is the Phase 13 hotfix assignment for Grok to revert that specific change and finally clear the data pipeline.
+
+---
+
+### Phase 13: Impala Strict Typing & SQL Unquoting
+
+**To: Grok (Cursor)**
+**From: Implementation Architect**
+
+The deployment of Phase 12 introduced a strict type mismatch in Impala. The `claim_id` column is a `BIGINT`, but we are passing a string literal (`'401'`). We need to revert the quotes around numeric IDs while keeping string-based IDs (like UUIDs) quoted.
+
+#### Task 1: Revert Quotes on BIGINT Columns
+
+* Open all `.sql` files in `packs/claims/catalog/` (e.g., `get_claim_spine.sql`, `get_claim_routing_signals.sql`).
+* Locate the `claim_id` variable placeholders: `'${var:claim_id}'`.
+* Remove the single quotes around the placeholder so that the numeric string is injected directly as an integer literal.
+* *Change:* `WHERE c.claim_id = '${var:claim_id}'`
+* *To:* `WHERE c.claim_id = ${var:claim_id}`
+
+
+* Do the same for any other explicitly numeric identifiers (like `fnol_id` if it is also a `BIGINT`).
+
+#### Task 2: Preserve Quotes on STRING Columns
+
+* Do **not** remove the quotes around `'{run_id}'`. A run ID is a UUID (a string), and the Iceberg columns storing it are `STRING`. Impala requires string literals to remain quoted.
+
+#### Task 3: Commit the Hotfix
+
+* Stage the SQL file changes.
+* Execute the commit: `git commit -m "fix(sql): remove quotes around BIGINT claim_id placeholders for Impala strict typing"`
+* Push to `main`.
+
+**Phase 13 Acceptance Criteria:**
+
+1. Restarting the FastAPI server and testing Claim `401` in the UI harness successfully executes the MCP queries.
+2. The server logs show Impala receiving `c.claim_id = 401` (without quotes).
+3. The right-pane JSON viewer returns a populated `checks` array and the correct `content.routing_summary` (`RequestPoliceReport`) instead of a `RuntimeError`.

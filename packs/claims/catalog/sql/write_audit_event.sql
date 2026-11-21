@@ -4,7 +4,7 @@ INSERT INTO ${var:database}.agent_run_audit (
 ) VALUES (
   '{run_id}',
   CURRENT_TIMESTAMP(),
-  '${var:claim_id}',
+  ${var:claim_id},
   '{event_type}',
   '{next_step}',
   '{agent_role}',

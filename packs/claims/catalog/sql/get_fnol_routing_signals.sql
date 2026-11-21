@@ -1,9 +1,9 @@
 WITH
 inj AS (
-  SELECT COUNT(*) AS cnt FROM ${var:database}.fnol_injury WHERE fnol_id = '${var:fnol_id}'
+  SELECT COUNT(*) AS cnt FROM ${var:database}.fnol_injury WHERE fnol_id = ${var:fnol_id}
 ),
 tpv AS (
-  SELECT COUNT(*) AS cnt FROM ${var:database}.fnol_third_party_vehicle WHERE fnol_id = '${var:fnol_id}'
+  SELECT COUNT(*) AS cnt FROM ${var:database}.fnol_third_party_vehicle WHERE fnol_id = ${var:fnol_id}
 ),
 unl AS (
   SELECT COUNT(*) AS cnt
@@ -15,7 +15,7 @@ unl AS (
     ON pd.policy_id = f.policy_id
    AND pd.driver_id = ld.driver_id
    AND pd.expiration_date IS NULL
-  WHERE f.fnol_id = '${var:fnol_id}'
+  WHERE f.fnol_id = ${var:fnol_id}
     AND pd.driver_id IS NULL
 )
 SELECT
