@@ -261,6 +261,8 @@ def _specialist_text(
 def _sanitize_chat_text(raw_text: str) -> str:
     """Drop leaked chain-of-thought and XML tool calls from the UI reply."""
     clean = _THINK_BLOCK.sub("", raw_text or "")
+    clean = re.sub(r"<think>.*", "", clean, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r"</think>", "", clean, flags=re.IGNORECASE)
     clean = _TOOL_CALL_BLOCK.sub("", clean)
     return clean.strip()
 

@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "mcp_forks" / "iceberg-mcp-server" / "src"))
 
-from core.agent_loop import run_intake, run_specialist
+from core.agent_loop import _sanitize_chat_text, run_intake, run_specialist
 from core.pack_manager import PackManager
 from iceberg_mcp_server import catalog
 
@@ -76,6 +76,11 @@ def test_specialist_chat_text_drops_think_and_tool_call_xml(monkeypatch, tmp_pat
     assert "<think>" in cot
     assert result["tool_invocations"][0]["label"] == "write_submission_decline"
     assert sum(1 for item in result["tool_invocations"] if item["label"] == "write_submission_decline") == 1
+
+
+def test_stray_think_closer_is_removed_from_chat_text():
+    assert _sanitize_chat_text("The decline was recorded.</think>") == "The decline was recorded."
+    assert "<think>" not in _sanitize_chat_text("<think>hidden reasoning without a closer")
 
 
 def test_get_claim_spine_logs_the_rendered_sql(capsys):

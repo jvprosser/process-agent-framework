@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,7 @@ class Content(BaseModel):
     routing_summary: RoutingSummary
     checks: list[CheckItem]
     view_data: dict[str, Any] = Field(default_factory=dict)
+    session_graph: dict[str, Any] = Field(default_factory=dict)
 
 
 class Actions(BaseModel):
@@ -94,6 +96,22 @@ def _actions(route: dict[str, Any] | None, entity_id: str | None) -> Actions:
     )
 
 
+def _session_graph(entity_id: str | None) -> dict[str, Any]:
+    """The case file intake wrote. Empty when that file is missing."""
+    if not entity_id:
+        return {}
+    from rules_engine.studio_io import graph_artifact_path
+
+    path = graph_artifact_path(entity_id)
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _view_data(route: dict[str, Any] | None) -> dict[str, Any]:
     if not route:
         return {}
@@ -127,6 +145,7 @@ def _response(
             routing_summary=routing_summary or RoutingSummary(),
             checks=[CheckItem.model_validate(item) for item in (checks or [])],
             view_data=_view_data(route),
+            session_graph=_session_graph(entity_id),
         ),
         actions=_actions(route, entity_id),
     )

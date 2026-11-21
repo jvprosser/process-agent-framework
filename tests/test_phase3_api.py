@@ -100,6 +100,8 @@ def test_chat_envelope_routes_submission(monkeypatch, tmp_path: Path):
     assert body["content"]["routing_summary"]["routing_reason"]
     assert body["content"]["checks"][-1]["probe_id"] == "P00_PROHIBITED_CLASS_CODE"
     assert body["content"]["view_data"] == {}
+    case_path = tmp_path / "claim_9100_case.json"
+    assert body["content"]["session_graph"] == json.loads(case_path.read_text(encoding="utf-8"))
     assert body["actions"] == {
         "quick_replies": ["Please write the recommended letter."],
         "tool_invocations": [
@@ -131,3 +133,4 @@ def test_chat_without_an_id_skips_routing(monkeypatch, tmp_path: Path):
     assert "couldn't find an ID" in body["content"]["chat_text"]
     assert body["content"]["routing_summary"]["next_step"] is None
     assert body["content"]["checks"] == []
+    assert body["content"]["session_graph"] == {}
