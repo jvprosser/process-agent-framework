@@ -152,6 +152,8 @@ def _bind(catalog: dict[str, Any], spec: dict[str, Any], params: dict[str, Any])
     bound = {str(key): value for key, value in params.items() if value not in (None, "")}
     if not bound.get("claim_id") and bound.get("case_id"):
         bound["claim_id"] = bound["case_id"]
+    if not bound.get("submission_id"):
+        bound["submission_id"] = bound.get("claim_id") or bound.get("entry_id")
     if "database" not in bound:
         bound["database"] = catalog.get("database") or os.getenv("IMPALA_DATABASE", "default")
     allowed = set(spec.get("required") or []) | set(spec.get("optional") or [])
@@ -272,6 +274,11 @@ def _values(bound: dict[str, Any]) -> dict[str, Any]:
                 values.setdefault(str(field), value)
     if values.get("claim_id") in (None, "") and values.get("case_id") not in (None, ""):
         values["claim_id"] = values["case_id"]
+    if values.get("submission_id") in (None, ""):
+        for key in ("claim_id", "entry_id", "entity_id"):
+            if values.get(key) not in (None, ""):
+                values["submission_id"] = values[key]
+                break
     return values
 
 

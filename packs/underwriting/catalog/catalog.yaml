@@ -1,96 +1,93 @@
-# Underwriting named catalog for the Studio tool run_named_catalog.
-# Upload this directory under Workflow Data so /workflow_data/catalog/catalog.yaml exists.
-# Handlers call iceberg-mcp-server-underwriting. claim_id is the numeric submission id (9200).
-# Do not upload fixtures/. MCP servers are unchanged. A label not listed here fails closed.
+# Underwriting named catalog. sql: a file of one or more Impala statements.
+# submission_id is the BIGINT surrogate. The app may pass it as claim_id.
 version: 1
-package: underwriting
 database: underwriting
 
 reads:
   get_submission_spine:
-    required: [claim_id]
-    optional: [database, case_id, submission_id]
+    required: [submission_id]
+    optional: [database, claim_id, entry_id]
     summary: Submission spine for graph build
-    handler: get_submission_spine
+    sql: sql/get_submission_spine.sql
   get_submission_routing_signals:
-    required: [claim_id]
-    optional: [database, case_id, submission_id]
+    required: [submission_id]
+    optional: [database, claim_id, entry_id]
     summary: Flood, inspection, loss, and stability signals for CEL
-    handler: get_submission_routing_signals
+    sql: sql/get_submission_routing_signals.sql
   get_senior_uw_referral_context:
-    required: [claim_id]
-    optional: [database, case_id, submission_id]
+    required: [submission_id]
+    optional: [database, claim_id, entry_id]
     summary: Senior underwriter referral context
-    handler: get_senior_uw_referral_context
+    sql: sql/get_senior_uw_referral_context.sql
   list_underwriter_open_submissions:
     required: [party_id]
     optional: [database]
     summary: Open submissions currently assigned to an underwriter
-    handler: list_underwriter_open_submissions
+    sql: sql/list_underwriter_open_submissions.sql
   list_low_confidence_fields:
-    required: [claim_id]
-    optional: [database, case_id, submission_id, min_confidence_score]
-    summary: Fields whose scanned words are below min_confidence_score (default 0.8)
-    handler: list_low_confidence_fields
+    required: [submission_id]
+    optional: [database, claim_id, entry_id, min_confidence_score]
+    summary: Fields whose scanned words are below the default confidence 0.8
+    sql: sql/list_low_confidence_fields.sql
   get_schema:
     required: []
     optional: [database]
     summary: List tables
-    handler: get_schema
+    sql: sql/get_schema.sql
 
 writes:
   write_submission_decline:
     required: [run_id, event_json]
-    optional: [database]
+    optional: [database, submission_id, claim_id, entry_id]
     summary: Decline a submission (reason_code OUT_OF_APPETITE) and audit it
-    handler: write_submission_decline
+    sql: sql/write_submission_decline.sql
   write_quote_issuance:
     required: [run_id, event_json]
-    optional: [database]
-    summary: Issue an indicative quote. Catalog computes tier and premium_cents
-    handler: write_quote_issuance
+    optional: [database, submission_id, claim_id, entry_id]
+    summary: Issue an indicative quote. SQL computes tier and premium_cents
+    sql: sql/write_quote_issuance.sql
   write_data_enrichment_request:
     required: [run_id, event_json]
-    optional: [database]
+    optional: [database, submission_id, claim_id, entry_id]
     summary: Request an inspection (provider_type INSPECTION) and audit it
-    handler: write_data_enrichment_request
+    sql: sql/write_data_enrichment_request.sql
   write_referral_queue:
     required: [run_id, event_json]
-    optional: [database]
+    optional: [database, submission_id, claim_id, entry_id]
     summary: Queue a senior underwriter referral and audit it
-    handler: write_referral_queue
+    sql: sql/write_referral_queue.sql
   write_audit_event:
     required: [run_id, event_json]
-    optional: [database]
-    summary: Insert one audit event (playbook name)
-    handler: write_audit_event
+    optional: [database, submission_id, claim_id, entry_id]
+    summary: Insert one audit event
+    sql: sql/write_audit_event.sql
   append_agent_audit_event:
     required: [run_id, event_json]
-    optional: [database]
+    optional: [database, submission_id, claim_id, entry_id]
     summary: Insert one audit event
-    handler: append_agent_audit_event
+    sql: sql/write_audit_event.sql
   append_agent_audit_evidence:
     required: [run_id, evidence_json]
-    optional: [database]
+    optional: [database, submission_id, claim_id, entry_id]
     summary: Insert one audit evidence row
-    handler: append_agent_audit_evidence
+    sql: sql/append_agent_audit_evidence.sql
   begin_agent_audit_run:
     required: [run_id]
     optional: [database, source_branch]
     summary: Begin audit run (table-append mode)
-    handler: begin_agent_audit_run
+    sql: sql/begin_agent_audit_run.sql
   promote_audit_run:
     required: [run_id]
     optional: [database]
-    summary: Promote audit run (playbook name)
-    handler: promote_audit_run
+    summary: Promote audit run
+    sql: sql/promote_audit_run.sql
   promote_agent_audit_run:
     required: [run_id]
     optional: [database]
     summary: Promote audit run
-    handler: promote_agent_audit_run
+    sql: sql/promote_audit_run.sql
   abandon_agent_audit_run:
     required: [run_id]
     optional: [database]
     summary: Delete audit rows for run_id
-    handler: abandon_agent_audit_run
+    sql: sql/abandon_agent_audit_run.sql
