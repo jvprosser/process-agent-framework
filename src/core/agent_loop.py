@@ -118,11 +118,11 @@ def run_specialist(route_json: dict, client: Mistral, pack: PackManager) -> dict
     write_label = _permitted_write(route_json, pack, allowed)
     bound = _bound_tools(pack, allowed)
     text, invocations, model_logs = _specialist_text(
-        client, prompt, route_json, bound, allowed, write_label
+        client, prompt, route_json, bound, allowed, write_label, pack
     )
     logs.extend(model_logs)
     if write_label and not any(item.get("label") == write_label for item in invocations):
-        invocations.extend(_execute_write(write_label, route_json))
+        invocations.extend(_execute_write(write_label, route_json, pack))
         logs.append(f"run_named_write {write_label}")
     text = _sanitize_chat_text(text)
     if not text:
@@ -203,6 +203,7 @@ def _specialist_text(
     bound: list[Any],
     allowed: list[str],
     write_label: str | None,
+    pack: PackManager,
 ) -> tuple[str, list[dict[str, Any]], list[str]]:
     instruction = (
         "Follow the routing JSON. Do not change next_step, agent_role, "
@@ -243,7 +244,7 @@ def _specialist_text(
     raw = _content(message)
     invocations: list[dict[str, Any]] = []
     for call in _tool_calls(message):
-        recorded = _dispatch_allowed(call, allowed, write_label, route_json)
+        recorded = _dispatch_allowed(call, allowed, write_label, route_json, pack)
         if recorded is not None:
             invocations.append(recorded)
     for name, label in _xml_tool_calls(raw):
@@ -252,7 +253,7 @@ def _specialist_text(
         if not _label_allowed(name, label, allowed, write_label):
             logs.append(f"specialist xml tool {name} {label} ignored")
             continue
-        result = run_named_write(label, _write_params(route_json))
+        result = run_named_write(label, _write_params(route_json, pack))
         invocations.append({"tool": name, "label": label, "result": result})
         logs.append(f"specialist xml run_named_write {label}")
     return raw.strip(), invocations, logs
@@ -302,10 +303,14 @@ def _parse_tool_call_body(body: str) -> tuple[str, str]:
     return "run_named_write", label_match.group(1)
 
 
-def _execute_write(write_label: str | None, route_json: dict[str, Any]) -> list[dict[str, Any]]:
+def _execute_write(
+    write_label: str | None,
+    route_json: dict[str, Any],
+    pack: PackManager,
+) -> list[dict[str, Any]]:
     if not write_label:
         return []
-    result = run_named_write(write_label, _write_params(route_json))
+    result = run_named_write(write_label, _write_params(route_json, pack))
     return [
         {
             "tool": "run_named_write",
@@ -320,6 +325,7 @@ def _dispatch_allowed(
     allowed: list[str],
     write_label: str | None,
     route_json: dict[str, Any],
+    pack: PackManager,
 ) -> dict[str, Any] | None:
     name = _call_name(call)
     tool = _CORE_TOOLS.get(name)
@@ -328,7 +334,7 @@ def _dispatch_allowed(
     args = _call_args(call)
     if name == "run_named_write":
         label = write_label or ""
-        params = _write_params(route_json)
+        params = _write_params(route_json, pack)
     else:
         label = str(args.get("label") or "").strip()
         raw_params = args.get("params")
@@ -382,10 +388,11 @@ def _bound_tools(pack: PackManager, allowed: list[str]) -> list[Any]:
     return bound
 
 
-def _write_params(route_json: dict[str, Any]) -> dict[str, str]:
+def _write_params(route_json: dict[str, Any], pack: PackManager) -> dict[str, str]:
     entity = str(route_json.get("entity_id") or "").strip()
     run_id = str(route_json.get("run_id") or f"run-{entity or 'session'}")
-    return {"run_id": run_id, "event_json": json.dumps(route_json)}
+    params = _read_params(pack, route_json)
+    return {"run_id": run_id, "event_json": json.dumps(route_json), **params}
 
 
 def _agent_prompt(pack: PackManager, agent_role: str) -> str:

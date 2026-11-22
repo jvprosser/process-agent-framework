@@ -61,6 +61,7 @@ def _catalog(monkeypatch):
         if op == "write":
             assert label == "write_submission_decline"
             assert params["run_id"]
+            assert params["claim_id"] == "9100"
             assert "entity_id" in json.loads(params["event_json"])
             return {"ok": True, "named_op": label, "named_op_kind": "write"}
         fixture = PACKS / "underwriting" / "fixtures" / label / f"{params['claim_id']}.json"
