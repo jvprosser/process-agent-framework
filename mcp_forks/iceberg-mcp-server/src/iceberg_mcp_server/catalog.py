@@ -61,6 +61,9 @@ def list_named_queries(root: Path | None = None) -> dict[str, Any]:
     }
 
 
+_DIALECTS = {"impala", "trino"}
+
+
 def execute(
     op: str,
     label: str,
@@ -69,6 +72,7 @@ def execute(
     root: Path | None = None,
     query_rows: QueryFn | None = None,
     execute_dml: DmlFn | None = None,
+    dialect: str | None = None,
 ) -> dict[str, Any]:
     catalog = load_catalog(root)
     kind = (op or "").strip().lower()
@@ -85,8 +89,12 @@ def execute(
     if not isinstance(spec, dict):
         known = sorted(reads if section == "reads" else writes)
         return _error("unknown label", label=name or None, known_labels=known)
+    incoming = dict(params or {})
+    if dialect:
+        incoming["dialect"] = dialect
     try:
-        bound = _bind(catalog, spec, params or {})
+        chosen = _take_dialect(incoming)
+        bound = _bind(catalog, spec, incoming)
     except ValueError as exc:
         return _error(str(exc), label=name)
     missing = [key for key in spec.get("required") or [] if bound.get(key) in (None, "")]
@@ -94,7 +102,7 @@ def execute(
         return _error("missing required params", label=name, missing=missing)
     label_kind = "read" if section == "reads" else "write"
     try:
-        statements = _statements(catalog, spec)
+        statements = _statements(catalog, spec, chosen)
     except ValueError as exc:
         return _error(str(exc), label=name)
     if statements is None:
@@ -124,7 +132,12 @@ def execute(
             return _error(f"statement cannot start with {prefix or 'empty'}", label=name)
     _log_sql(name, rendered)
     try:
-        ran = _run_all(rendered, query_rows=query_rows, execute_dml=execute_dml)
+        ran = _run_all(
+            rendered,
+            query_rows=query_rows,
+            execute_dml=execute_dml,
+            dialect=chosen,
+        )
     except Exception as exc:
         return _error(str(exc), label=name)
     _log_rows(name, ran)
@@ -146,6 +159,16 @@ def _log_rows(label: str, ran: list[dict[str, Any]]) -> None:
             file=sys.stderr,
             flush=True,
         )
+
+
+def _take_dialect(params: dict[str, Any]) -> str:
+    raw = params.pop("dialect", None)
+    if raw in (None, ""):
+        return "impala"
+    chosen = str(raw).strip().lower()
+    if chosen not in _DIALECTS:
+        raise ValueError(f"invalid dialect: {chosen}")
+    return chosen
 
 
 def _bind(catalog: dict[str, Any], spec: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
@@ -171,7 +194,11 @@ def _bind(catalog: dict[str, Any], spec: dict[str, Any], params: dict[str, Any])
     return bound
 
 
-def _statements(catalog: dict[str, Any], spec: dict[str, Any]) -> list[tuple[str | None, str]] | None:
+def _statements(
+    catalog: dict[str, Any],
+    spec: dict[str, Any],
+    dialect: str,
+) -> list[tuple[str | None, str]] | None:
     raw = spec.get("sql", spec.get("statements", None))
     if raw is None:
         return None
@@ -184,7 +211,7 @@ def _statements(catalog: dict[str, Any], spec: dict[str, Any]) -> list[tuple[str
                 name = item.get("name") or item.get("result")
                 body = item.get("statement") or item.get("sql")
                 if body is None and item.get("file"):
-                    body = _read_sql(catalog, str(item["file"]))
+                    body = _read_sql(catalog, str(item["file"]), dialect)
                 if body is None:
                     raise ValueError("SQL list entry needs statement text or a file")
                 pieces = split_statements(str(body))
@@ -195,7 +222,7 @@ def _statements(catalog: dict[str, Any], spec: dict[str, Any]) -> list[tuple[str
             else:
                 raise ValueError("SQL list entries must be strings or mappings")
         return found
-    text = _read_sql(catalog, str(raw)) if not _looks_like_sql(str(raw)) else str(raw)
+    text = _read_sql(catalog, str(raw), dialect) if not _looks_like_sql(str(raw)) else str(raw)
     return split_statements(text)
 
 
@@ -204,10 +231,21 @@ def _looks_like_sql(text: str) -> bool:
     return prefix in _READ_PREFIXES or prefix in ("insert", "update", "delete")
 
 
-def _read_sql(catalog: dict[str, Any], relative: str) -> str:
-    path = (Path(catalog["_path"]).parent / relative).resolve()
+def _dialect_relative(relative: str, dialect: str) -> str:
+    """Place sql/<file>.sql under sql/<dialect>/ without rewriting an explicit dialect path."""
+    parts = Path(relative).parts
+    if parts and parts[0] == "sql" and (len(parts) == 1 or parts[1] not in _DIALECTS):
+        return str(Path("sql", dialect, *parts[1:]))
+    if len(parts) == 1 and parts[0].endswith(".sql"):
+        return str(Path("sql", dialect, parts[0]))
+    return relative
+
+
+def _read_sql(catalog: dict[str, Any], relative: str, dialect: str = "impala") -> str:
+    located = _dialect_relative(relative, dialect)
+    path = (Path(catalog["_path"]).parent / located).resolve()
     if not path.is_file():
-        raise ValueError(f"SQL file not found: {relative}")
+        raise ValueError(f"SQL file not found: {located}")
     return path.read_text(encoding="utf-8")
 
 
@@ -301,11 +339,12 @@ def _run_all(
     *,
     query_rows: QueryFn | None,
     execute_dml: DmlFn | None,
+    dialect: str = "impala",
 ) -> list[dict[str, Any]]:
     if query_rows is None and execute_dml is None:
-        from iceberg_mcp_server.impala import run_statements
+        from iceberg_mcp_server.db import run_statements
 
-        return run_statements(statements)
+        return run_statements(statements, dialect)
     results: list[dict[str, Any]] = []
     for sql in statements:
         prefix = sql.split(None, 1)[0].lower()

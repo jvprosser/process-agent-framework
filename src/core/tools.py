@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,14 @@ tool = agents.tool
 
 _session_entity_id: str | None = None
 _session_case_path: Path | None = None
+_session_dialect: ContextVar[str] = ContextVar("catalog_dialect", default="impala")
+
+
+def set_catalog_dialect(dialect: str | None) -> str:
+    """Remember the SQL dialect for catalog calls on this request."""
+    chosen = str(dialect or "impala").strip().lower() or "impala"
+    _session_dialect.set(chosen)
+    return chosen
 
 
 @tool
@@ -144,7 +153,9 @@ def _mcp_process(manager: PackManager) -> tuple[list[str], dict[str, str]]:
 def _call_mcp(op: str, label: str, params: dict, manager: PackManager) -> dict:
     """Spawn the unified catalog server with the active pack directory."""
     argv, env = _mcp_process(manager)
-    request = json.dumps({"op": op, "label": label, "params": params})
+    payload = dict(params)
+    payload.setdefault("dialect", _session_dialect.get())
+    request = json.dumps({"op": op, "label": label, "params": payload})
     completed = subprocess.run(
         [*argv, "--call", request],
         env=env,

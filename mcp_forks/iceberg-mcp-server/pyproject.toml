@@ -1,11 +1,12 @@
 [project]
 name = "iceberg-mcp-server"
 version = "1.0.0"
-description = "Pack-scoped Impala catalog server. Four tools, no free SQL."
+description = "Pack-scoped Impala and Trino catalog server. Four tools, no free SQL."
 requires-python = ">=3.10"
 dependencies = [
   "pyyaml>=6",
   "impyla>=0.19.0",
+  "trino>=0.336.0",
 ]
 
 [project.scripts]

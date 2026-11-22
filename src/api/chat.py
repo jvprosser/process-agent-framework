@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from core.agent_loop import run_intake, run_orchestrator, run_specialist
 from core.mistral_client import local_client
 from core.pack_manager import PackManager
+from core.tools import set_catalog_dialect
 
 _PACKS = Path(__file__).resolve().parents[2] / "packs"
 _MISSING_ID = "I couldn't find an ID in your request. Include the entity id and try again."
@@ -23,6 +24,7 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     user_text: str
     pack_id: str
+    dialect: str = "impala"
 
 
 class Meta(BaseModel):
@@ -30,6 +32,7 @@ class Meta(BaseModel):
     run_id: str
     entity_id: str | None
     terminal: bool
+    dialect: str = "impala"
     debug_cot: list[str] = Field(default_factory=list)
 
 
@@ -126,6 +129,7 @@ def _response(
     entity_id: str | None,
     terminal: bool,
     chat_text: str,
+    dialect: str = "impala",
     routing_summary: RoutingSummary | None = None,
     checks: list[dict[str, Any]] | None = None,
     route: dict[str, Any] | None = None,
@@ -137,6 +141,7 @@ def _response(
             run_id=run_id,
             entity_id=entity_id,
             terminal=terminal,
+            dialect=dialect,
             debug_cot=list(debug_cot or []),
         ),
         layout=_layout(),
@@ -159,6 +164,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    dialect = set_catalog_dialect(request.dialect)
     client = local_client()
     entity_id = None
     try:
@@ -169,6 +175,7 @@ def chat(request: ChatRequest) -> ChatResponse:
                 run_id=run_id,
                 entity_id=None,
                 terminal=False,
+                dialect=dialect,
                 chat_text=_MISSING_ID,
                 debug_cot=["orchestrator: no entity id"],
             )
@@ -181,6 +188,7 @@ def chat(request: ChatRequest) -> ChatResponse:
             run_id=run_id,
             entity_id=entity_id,
             terminal=False,
+            dialect=dialect,
             chat_text=f"{exc.__class__.__name__}: {exc}",
             debug_cot=[f"{exc.__class__.__name__}: {exc}"],
         )
@@ -189,6 +197,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         run_id=run_id,
         entity_id=entity_id,
         terminal=bool(route.get("terminal", False)),
+        dialect=dialect,
         chat_text=str(specialist.get("text") or ""),
         routing_summary=RoutingSummary(
             next_step=route.get("next_step"),
