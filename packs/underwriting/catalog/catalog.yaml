@@ -2,6 +2,7 @@
 # The session id parameter is claim_id. SQL compares it to the submission_id column.
 version: 1
 database: underwriting
+schema: underwriting
 
 reads:
   get_submission_spine:

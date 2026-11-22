@@ -137,6 +137,7 @@ def execute(
             query_rows=query_rows,
             execute_dml=execute_dml,
             dialect=chosen,
+            schema=catalog.get("schema"),
         )
     except Exception as exc:
         return _error(str(exc), label=name)
@@ -340,11 +341,12 @@ def _run_all(
     query_rows: QueryFn | None,
     execute_dml: DmlFn | None,
     dialect: str = "impala",
+    schema: Any = None,
 ) -> list[dict[str, Any]]:
     if query_rows is None and execute_dml is None:
         from iceberg_mcp_server.db import run_statements
 
-        return run_statements(statements, dialect)
+        return run_statements(statements, dialect, schema=None if schema is None else str(schema))
     results: list[dict[str, Any]] = []
     for sql in statements:
         prefix = sql.split(None, 1)[0].lower()

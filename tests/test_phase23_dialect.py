@@ -91,6 +91,41 @@ def test_trino_signals_drop_impala_functions():
     assert "unix_timestamp" in seen[1]
 
 
+def test_trino_schema_comes_from_the_pack_catalog(monkeypatch):
+    monkeypatch.setenv("TRINO_SCHEMA", "ignored")
+    seen: dict[str, str | None] = {}
+
+    def run_statements(statements, dialect="impala", schema=None):
+        seen["dialect"] = dialect
+        seen["schema"] = schema
+        return [{"kind": "read", "rows": [dict(ROW)]}]
+
+    monkeypatch.setattr("iceberg_mcp_server.db.run_statements", run_statements)
+    underwriting = execute(
+        "query",
+        "get_submission_spine",
+        {"claim_id": "9100"},
+        root=PACK,
+        dialect="trino",
+    )
+    assert underwriting["ok"] is True
+    assert seen == {"dialect": "trino", "schema": "underwriting"}
+
+    claims = execute(
+        "query",
+        "get_claim_spine",
+        {"claim_id": "401"},
+        root=REPO / "packs" / "claims",
+        dialect="trino",
+    )
+    assert claims["ok"] is True
+    assert seen["schema"] == "car_insurance_claims"
+
+    from iceberg_mcp_server.trino_client import connection_kwargs
+
+    assert connection_kwargs("car_insurance_claims")["schema"] == "car_insurance_claims"
+
+
 def test_unknown_dialect_is_rejected():
     result = execute(
         "query",

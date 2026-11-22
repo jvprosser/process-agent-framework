@@ -8,13 +8,13 @@ from typing import Any
 _QUERY_PREFIXES = ("select", "with", "show", "describe")
 
 
-def connection_kwargs() -> dict[str, Any]:
+def connection_kwargs(schema: str) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "host": os.getenv("TRINO_HOST", "localhost"),
         "port": int(os.getenv("TRINO_PORT", "8080")),
         "user": os.getenv("TRINO_USER", "trino"),
         "catalog": os.getenv("TRINO_CATALOG", "iceberg"),
-        "schema": os.getenv("TRINO_SCHEMA", os.getenv("TRINO_DATABASE", "default")),
+        "schema": schema,
         "http_scheme": os.getenv("TRINO_HTTP_SCHEME", "http"),
     }
     password = os.getenv("TRINO_PASSWORD", "").strip()
@@ -25,10 +25,10 @@ def connection_kwargs() -> dict[str, Any]:
     return kwargs
 
 
-def _connect():
+def _connect(schema: str):
     from trino.dbapi import connect
 
-    return connect(**connection_kwargs())
+    return connect(**connection_kwargs(schema))
 
 
 def _prefix(sql: str) -> str:
@@ -49,10 +49,12 @@ def _failure(exc: BaseException) -> RuntimeError:
     )
 
 
-def run_statements(statements: list[str]) -> list[dict[str, Any]]:
+def run_statements(statements: list[str], schema: str) -> list[dict[str, Any]]:
+    if not schema or not str(schema).strip():
+        raise ValueError("pack catalog has no schema")
     conn = None
     try:
-        conn = _connect()
+        conn = _connect(schema)
         cursor = conn.cursor()
         results: list[dict[str, Any]] = []
         for sql in statements:
