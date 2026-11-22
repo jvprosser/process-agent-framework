@@ -28,7 +28,7 @@ The model does not choose the route. Intake and the orchestrator use fixed promp
 
 ## 3. Pack layout
 
-- **`pack.yaml`**: pack id, `entry_id_param`, ontology path, playbook path, and `graph` type lists (`strings`, `numbers`, `booleans`, `lists`). CEL coercion reads those lists. Every current pack sets `entry_id_param: claim_id`. `session_spine` and `session_signals` are optional. Only the claims pack sets them (`get_claim_spine` and `get_claim_routing_signals`). Underwriting and both retirement packs omit them and use the suffix fallback. A nested `catalog:` block is fixture metadata, not the SQL catalog. Underwriting and both retirement packs include that block. Claims omits it.
+- **`pack.yaml`**: pack id, `entry_id_param`, ontology path, playbook path, and `graph` type lists (`strings`, `numbers`, `booleans`, `lists`). CEL coercion reads those lists. Every current pack sets `entry_id_param: claim_id`. Every `pack.yaml` explicitly defines `session_spine`, `session_signals`, and a nested `catalog:` block for fixture metadata. That block is not the SQL catalog.
 - **`ontology/*.json`**: fields projected onto the session entry.
 - **`playbook/playbook.yaml`**: ordered CEL probes and the action for each probe. The action supplies the step, agent, lane, write label, tools, and terminal flag.
 - **`catalog/catalog.yaml`**: `database`, and for Trino a `schema`. Reads and writes are labels. A label is runnable only when it has a `sql:` file. `handler:` or `fixture:` with no `sql:` fails closed.
@@ -39,7 +39,7 @@ The model does not choose the route. Intake and the orchestrator use fixed promp
 
 Lake access is exclusively `run_named_query` and `run_named_write` by label. The model does not author SQL.
 
-`build_session_graph` resolves the spine and signals queries by first checking `pack.yaml` for explicit `session_spine` and `session_signals` keys (required for packs like Claims that have multiple suffix matches, e.g., `get_claim_spine` vs `get_fnol_spine`). If omitted, it falls back to finding the single label ending in `_spine` and `_routing_signals`. It passes `{entry_id_param: entity_id}` to both. The builder keeps the spine object and the signals object. Another `-- result:` statement in the same file is not copied onto the entry. The entry is local session state and is not written back to Iceberg.
+`build_session_graph` resolves the spine and signals queries strictly by reading `session_spine` and `session_signals` from the pack configuration. There is no suffix guessing or fallback logic. A pack missing either key raises a configuration error. It passes `{entry_id_param: entity_id}` to both. The builder keeps the spine object and the signals object. Another `-- result:` statement in the same file is not copied onto the entry. The entry is local session state and is not written back to Iceberg.
 
 `database:` is substituted for `${var:database}` in both dialects. `schema:` is the Trino session schema and is required for a live Trino call. Impala still connects with `IMPALA_DATABASE` and does not read `schema:`.
 

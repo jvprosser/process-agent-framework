@@ -1,5 +1,7 @@
 id: retirement_rollovers
 entry_id_param: claim_id
+session_spine: get_rollover_spine
+session_signals: get_rollover_routing_signals
 ontology: ontology/rollovers.json
 playbook: playbook/playbook.yaml
 exemplars: exemplars.yaml

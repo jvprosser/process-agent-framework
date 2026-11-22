@@ -57,8 +57,8 @@ def build_session_graph(entry_id: str) -> dict:
     if any(part in entity for part in ("/", "\\", "..")):
         raise RuntimeError("entry_id is not a safe session name")
 
-    spine_label = _graph_label(manager, "_spine", "session_spine")
-    signals_label = _graph_label(manager, "_routing_signals", "session_signals")
+    spine_label = _graph_label(manager, "session_spine")
+    signals_label = _graph_label(manager, "session_signals")
     params = _entity_params(manager, entity)
     spine = _as_graph_object(
         _require_read(_run_catalog("query", spine_label, params), spine_label),
@@ -194,11 +194,13 @@ def _entity_params(manager: PackManager, entity_id: str) -> dict[str, str]:
     return {key: entity_id}
 
 
-def _graph_label(manager: PackManager, suffix: str, manifest_key: str) -> str:
+def _graph_label(manager: PackManager, manifest_key: str) -> str:
     chosen = str(manager.manifest.get(manifest_key) or "").strip()
-    if chosen:
-        return chosen
-    return _single_label(manager.catalog, suffix)
+    if not chosen:
+        raise RuntimeError(
+            f"Pack '{manager.pack_name}' manifest is missing {manifest_key}"
+        )
+    return chosen
 
 
 def _as_graph_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
@@ -210,17 +212,6 @@ def _as_graph_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
     shaped = dict(payload)
     shaped[key] = object_row
     return shaped
-
-
-def _single_label(catalog: dict[str, Any], suffix: str) -> str:
-    reads = catalog.get("reads") or {}
-    matches = [name for name in reads if str(name).endswith(suffix)]
-    if len(matches) != 1:
-        raise RuntimeError(
-            f"Catalog must declare exactly one read ending in '{suffix}'. "
-            f"Found: {', '.join(sorted(matches)) or 'none'}"
-        )
-    return matches[0]
 
 
 def _require_read(payload: dict[str, Any], label: str) -> dict[str, Any]:

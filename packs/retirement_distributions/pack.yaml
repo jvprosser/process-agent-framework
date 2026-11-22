@@ -1,5 +1,7 @@
 id: retirement_distributions
 entry_id_param: claim_id
+session_spine: get_distribution_spine
+session_signals: get_distribution_routing_signals
 ontology: ontology/distributions.json
 playbook: playbook/playbook.yaml
 exemplars: exemplars.yaml

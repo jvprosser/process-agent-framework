@@ -32,3 +32,7 @@ graph:
     - insured_operators
     - offers
     - roles
+catalog:
+  database: car_insurance_claims
+  fixture_writes: false
+  reads: {}
