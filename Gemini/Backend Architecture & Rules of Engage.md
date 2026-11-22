@@ -13,7 +13,7 @@ The chat path operates in three Python steps:
 2. `run_intake` materializes the session entry and evaluates the playbook. `next_step`, `agent_role`, `lane`, `write`, and `allowed_tools` come *only* from that evaluation.
 3. `run_specialist` runs the assigned role binding only `run_named_query` and `run_named_write`. (Even if `save_entry_artifact` appears in `allowed_tools`, it is not offered to the model).
 
-The model does not choose the route. Intake and the orchestrator use fixed prompts in `src/core/agent_loop.py`. The specialist prompt is the one pack file whose stem matches `agent_role` or its snake_case form (e.g., `UnderwritingIntakeSpecialist` maps to `underwriting_intake_specialist.md`).
+The model does not choose the route. The codebase is 100% free of CrewAI. There are no manager agents or task hierarchies. Intake and the orchestrator use fixed standalone prompts in `src/core/agent_loop.py`. The specialist prompt is the one pack file whose stem matches `agent_role` or its snake_case form (e.g., `UnderwritingIntakeSpecialist` maps to `underwriting_intake_specialist.md`).
 
 ## 2. The API contract
 
@@ -33,7 +33,7 @@ The model does not choose the route. Intake and the orchestrator use fixed promp
 - **`playbook/playbook.yaml`**: ordered CEL probes and the action for each probe. The action supplies the step, agent, lane, write label, tools, and terminal flag.
 - **`catalog/catalog.yaml`**: `database`, and for Trino a `schema`. Reads and writes are labels. A label is runnable only when it has a `sql:` file. `handler:` or `fixture:` with no `sql:` fails closed.
 - **`catalog/sql/{dialect}/`**: Impala and Trino statement files. The yaml path stays `sql/<file>.sql`. The loader inserts `impala` or `trino`. Claims and underwriting have both trees. The retirement packs have no SQL tree and no schema key.
-- **`agents/*.md`**: the specialist prompt for that role. If the pack has no `agents/` directory, the role gets one generic line. If the directory exists, the role must match exactly one file. `manager_agent.md` and `orchestrator_agent.md` are unread purely because no playbook role assigns those names.
+- **`agents/*.md`**: the specialist prompt for that role. If the pack has no `agents/` directory, the role gets one generic line. If the directory exists, the role must match exactly one file. This directory strictly contains only the specialist prompts assigned by the playbook. No legacy manager or orchestrator prompts exist.
 
 ## 4. Session document and SQL
 
