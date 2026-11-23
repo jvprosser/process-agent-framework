@@ -126,6 +126,18 @@ def test_trino_schema_comes_from_the_pack_catalog(monkeypatch):
     assert connection_kwargs("car_insurance_claims")["schema"] == "car_insurance_claims"
 
 
+def test_trino_always_uses_https(monkeypatch):
+    monkeypatch.setenv("TRINO_PORT", "8080")
+    monkeypatch.setenv("TRINO_HTTP_SCHEME", "http")
+    monkeypatch.setenv("TRINO_PASSWORD", "secret")
+
+    from iceberg_mcp_server.trino_client import connection_kwargs
+
+    kwargs = connection_kwargs("car_insurance_claims")
+    assert kwargs["http_scheme"] == "https"
+    assert kwargs["auth"].__class__.__name__ == "BasicAuthentication"
+
+
 def test_unknown_dialect_is_rejected():
     result = execute(
         "query",

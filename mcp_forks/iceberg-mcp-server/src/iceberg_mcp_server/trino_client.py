@@ -15,7 +15,7 @@ def connection_kwargs(schema: str) -> dict[str, Any]:
         "user": os.getenv("TRINO_USER", "trino"),
         "catalog": os.getenv("TRINO_CATALOG", "iceberg"),
         "schema": schema,
-        "http_scheme": os.getenv("TRINO_HTTP_SCHEME", "http"),
+        "http_scheme": "https",
     }
     password = os.getenv("TRINO_PASSWORD", "").strip()
     if password:

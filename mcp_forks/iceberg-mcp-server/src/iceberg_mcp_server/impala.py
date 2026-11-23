@@ -66,7 +66,7 @@ def connection_kwargs() -> dict[str, Any]:
         "auth_mechanism": auth,
         "use_http_transport": _env_bool("IMPALA_USE_HTTP_TRANSPORT", True),
         "http_path": os.getenv("IMPALA_HTTP_PATH", "cliservice"),
-        "use_ssl": _env_bool("IMPALA_USE_SSL", True),
+        "use_ssl": True,
     }
     if auth.upper() == "JWT":
         kwargs["auth_mechanism"] = "JWT"

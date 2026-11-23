@@ -57,6 +57,7 @@ def test_cdw_url_uses_the_original_ldap_settings(monkeypatch):
 
 def test_unset_impala_env_matches_the_original_server(monkeypatch):
     _clear_impala(monkeypatch)
+    monkeypatch.setenv("IMPALA_USE_SSL", "false")
     monkeypatch.setattr(impala, "_JWT_PATH", Path("/no/such/jwt"))
 
     kwargs = impala.connection_kwargs()
