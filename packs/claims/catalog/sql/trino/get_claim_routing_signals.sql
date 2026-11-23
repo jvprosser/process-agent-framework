@@ -1,21 +1,3 @@
--- result: refresh_loss_driver
-REFRESH ${var:database}.loss_driver;
-
--- result: refresh_claim
-REFRESH ${var:database}.claim;
-
--- result: refresh_police_report
-REFRESH ${var:database}.police_report;
-
--- result: refresh_fault_determination
-REFRESH ${var:database}.fault_determination;
-
--- result: refresh_claim_police_intake
-REFRESH ${var:database}.claim_police_intake;
-
--- result: refresh_claim_outbound_message
-REFRESH ${var:database}.claim_outbound_message;
-
 -- result: signals
 WITH
 sub AS (
