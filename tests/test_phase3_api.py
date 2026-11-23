@@ -128,9 +128,34 @@ def test_chat_without_an_id_skips_routing(monkeypatch, tmp_path: Path):
     body = response.json()
     assert set(body) == {"meta", "layout", "content", "actions"}
     assert body["meta"]["entity_id"] is None
+    assert body["meta"]["dialect"] == "impala"
     assert body["meta"]["debug_cot"] == ["orchestrator: no entity id"]
     assert body["meta"]["terminal"] is False
     assert "couldn't find an ID" in body["content"]["chat_text"]
     assert body["content"]["routing_summary"]["next_step"] is None
     assert body["content"]["checks"] == []
     assert body["content"]["session_graph"] == {}
+
+
+def test_claims_pack_defaults_to_trino(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
+    _install_fakes(monkeypatch)
+    client = TestClient(app)
+
+    omitted = client.post(
+        "/api/v1/chat",
+        json={"user_text": "What should we do next?", "pack_id": "claims"},
+    )
+    forced = client.post(
+        "/api/v1/chat",
+        json={
+            "user_text": "What should we do next?",
+            "pack_id": "claims",
+            "dialect": "impala",
+        },
+    )
+
+    assert omitted.status_code == 200
+    assert omitted.json()["meta"]["dialect"] == "trino"
+    assert forced.status_code == 200
+    assert forced.json()["meta"]["dialect"] == "impala"

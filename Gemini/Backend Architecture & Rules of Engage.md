@@ -17,7 +17,7 @@ The model does not choose the route. The codebase is 100% free of CrewAI. There 
 
 ## 2. The API contract
 
-`POST /api/v1/chat` accepts `user_text`, `pack_id`, and `dialect` (`impala` when omitted). The response is a Pydantic `ChatResponse` with four strict nodes:
+`POST /api/v1/chat` accepts `user_text`, `pack_id`, and an optional `dialect`. When `dialect` is omitted, the pack's `dialect` is used. That key defaults to `impala`. Claims sets `dialect: trino`. The response is a Pydantic `ChatResponse` with four strict nodes:
 
 - **`meta`**: `pack_id`, `run_id` (a new UUID for the HTTP request), `entity_id`, `terminal`, `dialect`, `debug_cot`.
 - **`layout`**: fixed as `template: split_pane`, `widgets: [chat_feed, routing_summary_panel]`, `focus: chat_feed`.

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from core.agent_loop import run_intake, run_orchestrator, run_specialist
 from core.mistral_client import local_client
 from core.pack_manager import PackManager
-from core.tools import set_catalog_dialect
+from core.tools import catalog_dialect
 
 _PACKS = Path(__file__).resolve().parents[2] / "packs"
 _MISSING_ID = "I couldn't find an ID in your request. Include the entity id and try again."
@@ -24,7 +24,7 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     user_text: str
     pack_id: str
-    dialect: str = "impala"
+    dialect: str | None = None
 
 
 class Meta(BaseModel):
@@ -164,7 +164,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    dialect = set_catalog_dialect(request.dialect)
+    dialect = catalog_dialect(request.dialect, pack)
     client = local_client()
     entity_id = None
     try:

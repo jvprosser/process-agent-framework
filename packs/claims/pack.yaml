@@ -1,5 +1,6 @@
 id: claims
 entry_id_param: claim_id
+dialect: trino
 session_spine: get_claim_spine
 session_signals: get_claim_routing_signals
 ontology: ontology/claims.json

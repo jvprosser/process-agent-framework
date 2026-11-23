@@ -28,6 +28,12 @@ def set_catalog_dialect(dialect: str | None) -> str:
     return chosen
 
 
+def catalog_dialect(requested: str | None, pack: PackManager) -> str:
+    """Request dialect wins. Otherwise the pack manifest, then Impala."""
+    chosen = str(requested or "").strip() or str(pack.manifest.get("dialect") or "").strip()
+    return set_catalog_dialect(chosen or None)
+
+
 @tool
 def run_named_query(label: str, params: dict) -> dict:
     """Run one allow-listed catalog read by label. Does not author SQL."""

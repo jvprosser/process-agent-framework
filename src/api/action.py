@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from core.pack_manager import PackManager
-from core.tools import CORE_TOOLS, save_entry_artifact
+from core.tools import CORE_TOOLS, catalog_dialect, save_entry_artifact
 
 _PACKS = Path(__file__).resolve().parents[2] / "packs"
 _TOOLS = {tool.name: tool for tool in (*CORE_TOOLS, save_entry_artifact)}
@@ -51,7 +51,8 @@ def _call(intent: str, payload: dict[str, Any]) -> Any:
 @router.post("/api/v1/action", response_model=ActionResponse)
 def action(request: ActionRequest) -> ActionResponse:
     try:
-        PackManager(request.pack_id, str(_PACKS))
+        pack = PackManager(request.pack_id, str(_PACKS))
+        catalog_dialect(None, pack)
     except RuntimeError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
