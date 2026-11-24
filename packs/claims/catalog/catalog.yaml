@@ -56,6 +56,11 @@ reads:
     optional: [database]
     summary: FNOL injury, third party, listed asset, peril, deductible
     sql: sql/get_fnol_routing_signals.sql
+  get_claim_fact_assertions:
+    required: [claim_id]
+    optional: [database]
+    summary: Latest asserted value for each case field
+    sql: sql/get_claim_fact_assertions.sql
   list_adjuster_open_claims:
     required: [party_id]
     optional: [database]
@@ -129,6 +134,11 @@ writes:
     optional: [database]
     summary: Insert claim 80000+fnol_id, insured and adjuster roles, optional reserve
     sql: sql/convert_fnol_to_claim.sql
+  write_claim_fact_assertions:
+    required: [run_id, claim_id, assertions_json]
+    optional: [database]
+    summary: Append one audit row per asserted case field
+    sql: sql/write_claim_fact_assertions.sql
   review_fnol:
     required: [run_id, event_json]
     optional: [database]

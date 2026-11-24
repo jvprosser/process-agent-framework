@@ -282,6 +282,7 @@ actions:
       step: FnolAlreadyTriaged
       agent: FnolAgent
       lane: FNOL
+      blocking: true
       write: write_audit_event
       tools: [get_fnol_spine, write_audit_event]
       terminal: true
@@ -291,6 +292,7 @@ actions:
       agent: DenyAgent
       coworker: Deny Agent
       lane: DENY
+      blocking: true
       write: deny_fnol
       tools: [get_fnol_spine, deny_fnol]
       terminal: true
@@ -300,6 +302,7 @@ actions:
       agent: FnolAgent
       coworker: FNOL Agent
       lane: FNOL
+      blocking: true
       write: convert_fnol_to_claim
       tools: [get_fnol_spine, convert_fnol_to_claim]
       terminal: true
@@ -309,6 +312,7 @@ actions:
       agent: DenyAgent
       coworker: Deny Agent
       lane: DENY
+      blocking: true
       write: deny_fnol
       tools: [get_fnol_spine, deny_fnol]
       terminal: true
@@ -318,6 +322,7 @@ actions:
       agent: HumanReviewAgent
       coworker: Human Review Agent
       lane: GENERAL
+      blocking: true
       write: review_fnol
       tools: [get_fnol_routing_signals, review_fnol]
       terminal: true
@@ -327,6 +332,7 @@ actions:
       agent: FnolAgent
       coworker: FNOL Agent
       lane: FNOL
+      blocking: true
       write: convert_fnol_to_claim
       tools: [get_fnol_spine, convert_fnol_to_claim]
       terminal: true
@@ -336,6 +342,7 @@ actions:
       agent: HumanReviewAgent
       coworker: Human Review Agent
       lane: GENERAL
+      blocking: true
       write: review_fnol
       tools: [get_fnol_routing_signals, review_fnol]
       terminal: true
@@ -345,6 +352,7 @@ actions:
       agent: FnolAgent
       coworker: FNOL Agent
       lane: FNOL
+      blocking: true
       write: close_fnol_incident_only
       tools: [get_fnol_spine, close_fnol_incident_only]
       terminal: true
@@ -354,6 +362,7 @@ actions:
       agent: HumanReviewAgent
       coworker: Human Review Agent
       lane: GENERAL
+      blocking: true
       write: review_fnol
       tools: [get_fnol_routing_signals, review_fnol]
       terminal: true
@@ -362,6 +371,7 @@ actions:
       step: FixDataQuality
       agent: DataQualityAgent
       lane: DATA_QUALITY
+      blocking: true
       write: write_audit_event
       tools: [build_claim_graph, validate_claim_graph, write_audit_event]
   R0.4:
@@ -369,6 +379,7 @@ actions:
       step: FixDataQuality
       agent: DataQualityAgent
       lane: DATA_QUALITY
+      blocking: true
       write: write_audit_event
       tools: [build_claim_graph, validate_claim_graph, write_audit_event]
   R1.1:
@@ -377,6 +388,7 @@ actions:
       agent: CloseoutAgent
       coworker: Closeout Agent
       lane: CLOSEOUT
+      blocking: false
       write: write_audit_event
       tools: [write_audit_event, promote_audit_run]
       terminal: true
@@ -386,6 +398,7 @@ actions:
       agent: DenyAgent
       coworker: Deny Agent
       lane: DENY
+      blocking: true
       write: write_audit_event
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
@@ -397,6 +410,7 @@ actions:
       agent: HumanReviewAgent
       coworker: Human Review Agent
       lane: GENERAL
+      blocking: true
       write: write_audit_event
       tools: [get_deny_view, write_audit_event]
       terminal: true
@@ -406,6 +420,7 @@ actions:
       agent: DenyAgent
       coworker: Deny Agent
       lane: DENY
+      blocking: true
       write: deny_claim
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
@@ -417,6 +432,7 @@ actions:
       agent: DenyAgent
       coworker: Deny Agent
       lane: DENY
+      blocking: true
       write: deny_claim
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
@@ -428,6 +444,7 @@ actions:
       agent: DenyAgent
       coworker: Deny Agent
       lane: DENY
+      blocking: true
       write: deny_claim
       letter_on_request: true
       letter_note: A denial letter is recommended. It will not be drafted unless you ask.
@@ -439,6 +456,7 @@ actions:
       agent: LitigationAgent
       coworker: Litigation Agent
       lane: LITIGATION
+      blocking: false
       write: create_litigation_task
       task_type_code: COMPLETE_FILE
       tools: [get_litigation_view, create_litigation_task]
@@ -448,6 +466,7 @@ actions:
       agent: LitigationAgent
       coworker: Litigation Agent
       lane: LITIGATION
+      blocking: false
       write: create_litigation_task
       task_type_code: ESCALATE_DISCOVERY
       tools: [get_litigation_view, create_litigation_task]
@@ -457,6 +476,7 @@ actions:
       agent: LitigationAgent
       coworker: Litigation Agent
       lane: LITIGATION
+      blocking: false
       write: write_audit_event
       letter_on_request: true
       letter_note: A litigation hold/status letter is recommended. It will not be drafted unless you ask.
@@ -466,6 +486,7 @@ actions:
       step: SiuInvestigation
       agent: SiuAgent
       lane: SIU
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
   R2.3:
@@ -473,6 +494,7 @@ actions:
       step: AssignAdjuster
       agent: DataQualityAgent
       lane: DATA_QUALITY
+      blocking: true
       write: write_audit_event
       tools: [build_claim_graph, write_audit_event]
   R2.0:
@@ -481,6 +503,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      blocking: false
       write: create_pd_task
       task_type_code: COLLECT_INCIDENT_NUMBER
       letter_on_request: false
@@ -492,6 +515,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      blocking: false
       write: write_audit_event
       letter_on_request: false
       letter_note: An SMS requesting the incident report number was already sent. Waiting on the policyholder.
@@ -502,6 +526,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      blocking: false
       write: create_pd_task
       task_type_code: REQUEST_POLICE_REPORT
       letter_on_request: true
@@ -513,6 +538,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      blocking: false
       write: create_pd_task
       task_type_code: DETERMINE_FAULT
       tools: [get_pd_view, create_pd_task]
@@ -522,20 +548,23 @@ actions:
       agent: BiClaimsAgent
       coworker: BI Claims Agent
       lane: BI
+      blocking: false
       write: write_audit_event
       tools: [get_bi_view, write_audit_event]
   R3.2:
     - when: ASK_TRUE
       step: FollowUpOffer
       agent: SettlementAgent
-      lane: GENERAL
+      lane: SETTLEMENT
+      blocking: false
       write: write_audit_event
       tools: [write_audit_event]
   R3.4:
     - when: ASK_TRUE
       step: IssuePayment
       agent: SettlementAgent
-      lane: GENERAL
+      lane: SETTLEMENT
+      blocking: false
       write: write_audit_event
       tools: [write_audit_event]
   R4.1:
@@ -543,7 +572,8 @@ actions:
       step: OpenSubrogationCase
       agent: SubrogationAgent
       coworker: Subrogation Agent
-      lane: PD
+      lane: SUBROGATION
+      blocking: false
       write: write_audit_event
       tools: [get_subrogation_view, write_audit_event]
   R4.3:
@@ -551,7 +581,8 @@ actions:
       step: PursueSubrogationRecovery
       agent: SubrogationAgent
       coworker: Subrogation Agent
-      lane: PD
+      lane: SUBROGATION
+      blocking: false
       write: write_audit_event
       tools: [get_subrogation_view, write_audit_event]
   R1.3:
@@ -560,6 +591,7 @@ actions:
       agent: BiClaimsAgent
       coworker: BI Claims Agent
       lane: BI
+      blocking: false
       write: write_audit_event
       tools: [get_bi_view, write_audit_event]
   R1.4:
@@ -568,6 +600,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      blocking: false
       write: create_pd_task
       task_type_code: PD_REVIEW
       tools: [get_pd_view, create_pd_task]
@@ -579,6 +612,7 @@ default_action:
   step: HumanReviewOrWait
   agent: HumanReviewAgent
   lane: GENERAL
+  blocking: true
   write: write_audit_event
   tools: [write_audit_event]
   terminal: true

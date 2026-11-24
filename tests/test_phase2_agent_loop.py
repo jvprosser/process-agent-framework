@@ -58,6 +58,8 @@ class _Client:
 def _catalog(monkeypatch):
     def fake_execute(op, label, params, manager):
         assert manager.catalog_path == PACKS / "underwriting" / "catalog" / "catalog.yaml"
+        if "fact_assertions" in label and op == "query":
+            return {"ok": True, "assertions": []}
         if op == "write":
             assert label == "write_submission_decline"
             assert params["run_id"]
@@ -130,5 +132,6 @@ def test_specialist_loads_role_prompt_and_executes_the_write(monkeypatch, tmp_pa
     specialist_call = client.chat.complete_calls[-1]
     assert PROMPT_MARK in specialist_call["messages"][0]["content"]
     assert [tool["function"]["name"] for tool in specialist_call["tools"]] == [
+        "patch_session_field",
         "run_named_write",
     ]

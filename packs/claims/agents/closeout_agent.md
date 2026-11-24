@@ -70,3 +70,7 @@ Call run_named_write once with label write_audit_event.
 Then run_named_write once with label promote_audit_run.
 Return summary + exact JSON.
 ```
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.

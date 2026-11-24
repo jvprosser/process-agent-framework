@@ -19,6 +19,20 @@ tool = agents.tool
 _session_entity_id: str | None = None
 _session_case_path: Path | None = None
 _session_dialect: ContextVar[str] = ContextVar("catalog_dialect", default="impala")
+_assertion_role: ContextVar[str] = ContextVar("assertion_role", default="")
+_assertion_lane: ContextVar[str] = ContextVar("assertion_lane", default="")
+_assertion_http_run: ContextVar[str] = ContextVar("assertion_http_run", default="")
+_state_mutated: ContextVar[bool] = ContextVar("state_mutated", default=False)
+
+_RESERVED_FIELDS = {
+    "entry_exists",
+    "next_step",
+    "agent_role",
+    "lane",
+    "write",
+    "allowed_tools",
+    "run_id",
+}
 
 
 def set_catalog_dialect(dialect: str | None) -> str:
@@ -91,6 +105,7 @@ def build_session_graph(entry_id: str) -> dict:
         signals=signals,
     )
     _project_ontology_fields(entry, manager.ontology_field_names())
+    _apply_assertions(entry, manager, entity)
     path = graph_artifact_path(entity)
     write_json_artifact(path, entry)
     _session_entity_id = entity
@@ -141,10 +156,105 @@ def evaluate_playbook() -> dict:
         "routing_summary": decision.get("routing_summary"),
         "routing_reason": decision.get("routing_reason"),
         "letter_on_request": bool(decision.get("letter_on_request", False)),
+        "routing_directives": list(decision.get("routing_directives") or []),
     }
     if decision.get("reason_code"):
         route["reason_code"] = decision["reason_code"]
     return route
+
+
+def reset_assertion_state() -> None:
+    """Clear the per-turn patch flag before a chat request."""
+    _state_mutated.set(False)
+
+
+def set_assertion_context(*, role: str, lane: str, http_run_id: str) -> None:
+    """Stamp sidecar rows with the specialist that is speaking."""
+    _assertion_role.set(role)
+    _assertion_lane.set(lane)
+    _assertion_http_run.set(http_run_id)
+
+
+def state_mutated() -> bool:
+    return bool(_state_mutated.get())
+
+
+@tool
+def patch_session_field(field: str, value: Any) -> dict:
+    """Record one ontology field on the session sidecar.
+
+    The playbook still chooses the next step. This does not write the lake.
+    """
+    manager = PackManager.active()
+    name = str(field or "").strip()
+    if name in _RESERVED_FIELDS or name not in set(manager.ontology_field_names()):
+        raise RuntimeError(f"field is not an ontology fact: {name}")
+    entity = str(_session_entity_id or "").strip()
+    if not entity:
+        raise RuntimeError("No session entry is materialized. Call build_session_graph first.")
+    from datetime import datetime, timezone
+
+    from rules_engine.studio_io import session_dir
+
+    path = session_dir() / f"entry_{entity}_overrides.json"
+    current = _read_json_object(path)
+    current[name] = {
+        "value": value,
+        "asserted_by_role": _assertion_role.get(),
+        "lane": _assertion_lane.get(),
+        "http_run_id": _assertion_http_run.get(),
+        "asserted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "committed_to_lake": False,
+    }
+    path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    _state_mutated.set(True)
+    return {"field": name, "committed_to_lake": False}
+
+
+def flush_fact_assertions(entity_id: str) -> bool:
+    """Insert uncommitted sidecar facts once. Leave them uncommitted on failure."""
+    manager = PackManager.active()
+    label = str(manager.manifest.get("fact_assertion_write") or "").strip()
+    entity = str(entity_id or "").strip()
+    path = _overrides_path(entity)
+    current = _read_json_object(path)
+    pending = {
+        key: meta
+        for key, meta in current.items()
+        if isinstance(meta, dict) and meta.get("committed_to_lake") is not True
+    }
+    if not pending or not label:
+        return False
+    key = str(manager.manifest.get("entry_id_param") or "").strip()
+    if not key:
+        raise RuntimeError(f"Pack '{manager.pack_name}' manifest is missing entry_id_param")
+    assertions = []
+    for field, meta in pending.items():
+        assertions.append(
+            {
+                "field_name": field,
+                "field_value": meta.get("value"),
+                "lane": meta.get("lane"),
+                "agent_role": meta.get("asserted_by_role"),
+                "http_run_id": meta.get("http_run_id"),
+                "asserted_at": meta.get("asserted_at"),
+            }
+        )
+    params = {
+        "run_id": f"run-{entity}",
+        key: entity,
+        "assertions_json": json.dumps(assertions).replace("'", "''"),
+    }
+    try:
+        result = _run_catalog("write", label, params)
+    except (RuntimeError, OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(result, dict) or result.get("ok") is False:
+        return False
+    for field in pending:
+        current[field]["committed_to_lake"] = True
+    path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    return True
 
 
 def _mcp_process(manager: PackManager) -> tuple[list[str], dict[str, str]]:
@@ -231,6 +341,66 @@ def _project_ontology_fields(entry: dict[str, Any], field_names: list[str]) -> N
     """Keep ontology-declared keys present on the session entry."""
     for name in field_names:
         entry.setdefault(name, None)
+
+
+def _apply_assertions(entry: dict[str, Any], manager: PackManager, entity: str) -> None:
+    """Lake assertions overlay the spine. The sidecar wins until the lake matches."""
+    graph = dict(manager.manifest.get("graph") or {})
+    allowed = set(manager.ontology_field_names())
+    lake: dict[str, Any] = {}
+    label = str(manager.manifest.get("session_assertions") or "").strip()
+    if label:
+        payload = _require_read(_run_catalog("query", label, _entity_params(manager, entity)), label)
+        rows = payload.get("assertions")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                field = str(row.get("field_name") or "").strip()
+                if field not in allowed:
+                    continue
+                entry[field] = row.get("field_value")
+                lake[field] = row.get("field_value")
+    path = _overrides_path(entity)
+    overrides = _read_json_object(path)
+    if not overrides:
+        return
+    kept = dict(overrides)
+    for field, meta in list(overrides.items()):
+        if not isinstance(meta, dict) or field not in allowed:
+            continue
+        raw = meta.get("value")
+        if field in lake and _coerce_field(field, raw, graph) == _coerce_field(field, lake[field], graph):
+            kept.pop(field, None)
+            continue
+        entry[field] = raw
+    if kept != overrides:
+        if kept:
+            path.write_text(json.dumps(kept, indent=2) + "\n", encoding="utf-8")
+        elif path.is_file():
+            path.unlink()
+
+
+def _coerce_field(field: str, value: Any, graph: dict[str, Any]) -> Any:
+    from rules_engine.graph.cel_rules import flatten_entry
+
+    return flatten_entry({field: value}, graph).get(field)
+
+
+def _overrides_path(entity: str) -> Path:
+    from rules_engine.studio_io import session_dir
+
+    return session_dir() / f"entry_{entity}_overrides.json"
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 @tool

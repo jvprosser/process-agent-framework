@@ -55,6 +55,8 @@ def _install_fakes(monkeypatch):
         assert manager.catalog_path == PACKS / "underwriting" / "catalog" / "catalog.yaml"
         if op == "write":
             return {"ok": True, "named_op": label, "named_op_kind": "write"}
+        if "fact_assertions" in label:
+            return {"ok": True, "assertions": []}
         fixture = PACKS / "underwriting" / "fixtures" / label / f"{params['claim_id']}.json"
         return json.loads(fixture.read_text(encoding="utf-8"))
 

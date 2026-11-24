@@ -52,6 +52,8 @@ def test_specialist_chat_text_drops_think_and_tool_call_xml(monkeypatch, tmp_pat
     def fake_execute(op, label, params, manager):
         if op == "write":
             return {"ok": True, "named_op": label, "named_op_kind": "write"}
+        if "fact_assertions" in label:
+            return {"ok": True, "assertions": []}
         fixture = PACKS / "underwriting" / "fixtures" / label / f"{params['claim_id']}.json"
         return json.loads(fixture.read_text(encoding="utf-8"))
 

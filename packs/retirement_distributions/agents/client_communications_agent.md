@@ -46,3 +46,7 @@ Do not call spine/signals or build/validate/route.
 | Studio | `run_named_write` |
 
 No MCP tools on this agent. The write label is `send_client_notice`.
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Distribution fields include `request_status_code` and `hardship_category`. Do not invent field names. Do not construct `event_json`.

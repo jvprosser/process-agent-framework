@@ -92,3 +92,7 @@ Call run_named_query once with {"label":"get_deny_view","claim_id":"401"}.
 Then run_named_write once with label write_audit_event.
 Do not deny_claim. Do not save_claim_letter. Return summary + exact JSON.
 ```
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.

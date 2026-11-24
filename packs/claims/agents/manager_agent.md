@@ -131,3 +131,7 @@ verbatim plus a json block with next_step, agent_role, lane,
 letter_on_request, coworker, write, task_type_code. Do not mention
 probe ids. Do not call specialist view labels or write audit.
 ```
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.

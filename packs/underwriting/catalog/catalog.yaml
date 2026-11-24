@@ -30,6 +30,11 @@ reads:
     optional: [database, min_confidence_score]
     summary: Fields whose scanned words are below the default confidence 0.8
     sql: sql/list_low_confidence_fields.sql
+  get_underwriting_fact_assertions:
+    required: [claim_id]
+    optional: [database]
+    summary: Latest asserted value for each submission field
+    sql: sql/get_underwriting_fact_assertions.sql
   get_schema:
     required: []
     optional: [database]
@@ -87,6 +92,11 @@ writes:
     optional: [database]
     summary: Promote audit run
     sql: sql/promote_audit_run.sql
+  write_underwriting_fact_assertions:
+    required: [run_id, claim_id, assertions_json]
+    optional: [database]
+    summary: Append one audit row per asserted submission field
+    sql: sql/write_underwriting_fact_assertions.sql
   abandon_agent_audit_run:
     required: [run_id]
     optional: [database]

@@ -66,3 +66,7 @@ Low-score smoke (expect needs_llm true):
 Call pre_route_text once with text: "what time is lunch"
 Return the exact tool JSON.
 ```
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.

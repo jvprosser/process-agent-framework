@@ -63,6 +63,7 @@ actions:
       step: FixDataQuality
       agent: DataQualityAgent
       lane: DATA_QUALITY
+      blocking: true
       write: write_audit_event
       tools: [build_claim_graph, validate_claim_graph, write_audit_event]
   R1.1:
@@ -71,6 +72,7 @@ actions:
       agent: CloseoutAgent
       coworker: Closeout Agent
       lane: CLOSEOUT
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event, promote_audit_run]
       terminal: true
@@ -80,6 +82,7 @@ actions:
       agent: ErisaReviewAgent
       coworker: ERISA Review Agent
       lane: ERISA
+      blocking: false
       write: write_audit_event
       tools: [get_erisa_review_view, write_audit_event]
   R2.2:
@@ -88,6 +91,7 @@ actions:
       agent: ExceptionQueueAgent
       coworker: Exception Queue Agent
       lane: EXCEPTION
+      blocking: false
       write: write_audit_event
       tools: [write_audit_event]
 
@@ -99,6 +103,7 @@ default_action:
   agent: RolloverOpsAgent
   coworker: Rollover Ops Agent
   lane: ROLLOVER
+  blocking: true
   write: write_audit_event
   tools: [write_audit_event]
   terminal: true

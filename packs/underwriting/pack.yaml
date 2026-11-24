@@ -2,6 +2,8 @@ id: underwriting
 entry_id_param: claim_id
 session_spine: get_submission_spine
 session_signals: get_submission_routing_signals
+fact_assertion_write: write_underwriting_fact_assertions
+session_assertions: get_underwriting_fact_assertions
 ontology: ontology/submissions.json
 playbook: playbook/playbook.yaml
 exemplars: exemplars.yaml

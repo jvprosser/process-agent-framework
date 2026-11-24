@@ -10,10 +10,28 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from core.agent_loop import run_intake, run_orchestrator, run_specialist
+from datetime import datetime, timezone
+
+from core.agent_loop import (
+    load_lane_transcript,
+    project_directive,
+    reject_entity_id,
+    run_intake,
+    run_orchestrator,
+    run_specialist,
+    save_lane_transcript,
+    select_directive,
+)
 from core.mistral_client import local_client
 from core.pack_manager import PackManager
-from core.tools import catalog_dialect
+from core.tools import (
+    build_session_graph,
+    catalog_dialect,
+    evaluate_playbook,
+    flush_fact_assertions,
+    reset_assertion_state,
+    state_mutated,
+)
 
 _PACKS = Path(__file__).resolve().parents[2] / "packs"
 _MISSING_ID = "I couldn't find an ID in your request. Include the entity id and try again."
@@ -25,12 +43,15 @@ class ChatRequest(BaseModel):
     user_text: str
     pack_id: str
     dialect: str | None = None
+    entity_id: str | None = None
+    lane: str | None = None
 
 
 class Meta(BaseModel):
     pack_id: str
     run_id: str
     entity_id: str | None
+    active_lane: str | None = None
     terminal: bool
     dialect: str = "impala"
     debug_cot: list[str] = Field(default_factory=list)
@@ -54,11 +75,35 @@ class CheckItem(BaseModel):
     title: str | None = None
     status: str | None = None
     detail: str | None = None
+    skipped_reason: str | None = None
+
+
+class RoutingDirective(BaseModel):
+    directive_id: str
+    lane: str
+    agent_role: str
+    next_step: str
+    routing_reason: str
+    blocking: bool
+    terminal: bool = False
+    write: str | None = None
+    allowed_tools: list[str] = Field(default_factory=list)
+    letter_on_request: bool = False
+
+
+class LaneMessage(BaseModel):
+    role: str
+    agent_role: str | None = None
+    lane: str
+    text: str
+    timestamp: str
 
 
 class Content(BaseModel):
     chat_text: str
+    lane_messages: list[LaneMessage] = Field(default_factory=list)
     routing_summary: RoutingSummary
+    routing_directives: list[RoutingDirective] = Field(default_factory=list)
     checks: list[CheckItem]
     view_data: dict[str, Any] = Field(default_factory=dict)
     session_graph: dict[str, Any] = Field(default_factory=dict)
@@ -134,12 +179,16 @@ def _response(
     checks: list[dict[str, Any]] | None = None,
     route: dict[str, Any] | None = None,
     debug_cot: list[str] | None = None,
+    active_lane: str | None = None,
+    directives: list[dict[str, Any]] | None = None,
+    lane_messages: list[dict[str, Any]] | None = None,
 ) -> ChatResponse:
     return ChatResponse(
         meta=Meta(
             pack_id=pack_id,
             run_id=run_id,
             entity_id=entity_id,
+            active_lane=active_lane,
             terminal=terminal,
             dialect=dialect,
             debug_cot=list(debug_cot or []),
@@ -147,13 +196,72 @@ def _response(
         layout=_layout(),
         content=Content(
             chat_text=chat_text,
+            lane_messages=[LaneMessage.model_validate(item) for item in (lane_messages or [])],
             routing_summary=routing_summary or RoutingSummary(),
+            routing_directives=[
+                RoutingDirective.model_validate(item) for item in (directives or [])
+            ],
             checks=[CheckItem.model_validate(item) for item in (checks or [])],
             view_data=_view_data(route),
             session_graph=_session_graph(entity_id),
         ),
         actions=_actions(route, entity_id),
     )
+
+
+def _summary_from(directive: dict[str, Any] | None) -> RoutingSummary:
+    if not directive:
+        return RoutingSummary()
+    return RoutingSummary(
+        next_step=directive.get("next_step"),
+        agent_role=directive.get("agent_role"),
+        lane=directive.get("lane"),
+        routing_reason=directive.get("routing_reason"),
+    )
+
+
+def _route_from_directive(directive: dict[str, Any], entity_id: str) -> dict[str, Any]:
+    return {
+        "entity_id": entity_id,
+        "next_step": directive.get("next_step"),
+        "agent_role": directive.get("agent_role"),
+        "allowed_tools": list(directive.get("allowed_tools") or []),
+        "write": directive.get("write"),
+        "lane": directive.get("lane"),
+        "terminal": bool(directive.get("terminal")),
+        "routing_reason": directive.get("routing_reason"),
+        "letter_on_request": bool(directive.get("letter_on_request")),
+    }
+
+
+def _directives_of(route: dict[str, Any]) -> list[dict[str, Any]]:
+    found = route.get("routing_directives")
+    if isinstance(found, list) and found:
+        return list(found)
+    return [
+        {
+            "directive_id": str(route.get("next_step") or "route"),
+            "lane": str(route.get("lane") or ""),
+            "agent_role": route.get("agent_role"),
+            "next_step": route.get("next_step"),
+            "routing_reason": str(route.get("routing_reason") or ""),
+            "blocking": True,
+            "terminal": bool(route.get("terminal")),
+            "write": route.get("write"),
+            "allowed_tools": list(route.get("allowed_tools") or []),
+            "letter_on_request": bool(route.get("letter_on_request")),
+        }
+    ]
+
+
+def _stamp(role: str, agent_role: str | None, lane: str, text: str) -> dict[str, Any]:
+    return {
+        "role": role,
+        "agent_role": agent_role,
+        "lane": lane,
+        "text": text,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
 
 
 @router.post("/api/v1/chat", response_model=ChatResponse)
@@ -167,21 +275,68 @@ def chat(request: ChatRequest) -> ChatResponse:
     dialect = catalog_dialect(request.dialect, pack)
     client = local_client()
     entity_id = None
+    reset_assertion_state()
     try:
-        entity_id = run_orchestrator(request.user_text, client)
-        if entity_id is None:
+        supplied = str(request.entity_id or "").strip()
+        if supplied:
+            entity_id = reject_entity_id(supplied)
+            orchestrator_note: list[str] = []
+        else:
+            entity_id = run_orchestrator(request.user_text, client)
+            if entity_id is None:
+                return _response(
+                    pack_id=request.pack_id,
+                    run_id=run_id,
+                    entity_id=None,
+                    terminal=False,
+                    dialect=dialect,
+                    chat_text=_MISSING_ID,
+                    debug_cot=["orchestrator: no entity id"],
+                )
+            entity_id = reject_entity_id(entity_id)
+            orchestrator_note = [f"orchestrator entity_id={entity_id}"]
+
+        route = run_intake(entity_id, client, pack)
+        directives = _directives_of(route)
+        selected, notice = select_directive(directives, request.lane)
+        if selected is None:
             return _response(
                 pack_id=request.pack_id,
                 run_id=run_id,
-                entity_id=None,
+                entity_id=entity_id,
                 terminal=False,
                 dialect=dialect,
-                chat_text=_MISSING_ID,
-                debug_cot=["orchestrator: no entity id"],
+                chat_text=notice or _MISSING_ID,
+                routing_summary=_summary_from(project_directive(directives, request.lane)),
+                checks=list(route.get("checks") or []),
+                directives=directives,
+                debug_cot=[*orchestrator_note, *list(route.get("debug_cot") or [])],
             )
 
-        route = run_intake(entity_id, client, pack)
-        specialist = run_specialist(route, client, pack)
+        active_lane = str(selected.get("lane") or "")
+        spoken = _route_from_directive(selected, entity_id)
+        spoken["routing_summary"] = route.get("routing_summary")
+        spoken["checks"] = route.get("checks")
+        spoken["http_run_id"] = run_id
+        spoken["debug_cot"] = [*orchestrator_note, *list(route.get("debug_cot") or [])]
+        transcript = load_lane_transcript(entity_id, active_lane)
+        transcript.append(_stamp("user", None, active_lane, request.user_text))
+        specialist = run_specialist(spoken, client, pack, transcript)
+        transcript.append(
+            _stamp("assistant", selected.get("agent_role"), active_lane, str(specialist.get("text") or ""))
+        )
+        save_lane_transcript(entity_id, active_lane, transcript)
+        if state_mutated():
+            flush_fact_assertions(entity_id)
+            pack.activate()
+            build_session_graph(entity_id)
+            route = evaluate_playbook()
+            directives = _directives_of(route)
+        projected = project_directive(directives, request.lane) or selected
+        summary = _summary_from(projected)
+        acted = dict(spoken)
+        acted["letter_on_request"] = bool(projected.get("letter_on_request"))
+        acted["view_data"] = specialist.get("route_json", {}).get("view_data")
     except Exception as exc:
         return _response(
             pack_id=request.pack_id,
@@ -196,16 +351,14 @@ def chat(request: ChatRequest) -> ChatResponse:
         pack_id=request.pack_id,
         run_id=run_id,
         entity_id=entity_id,
-        terminal=bool(route.get("terminal", False)),
+        active_lane=active_lane,
+        terminal=bool(projected.get("terminal", False)),
         dialect=dialect,
         chat_text=str(specialist.get("text") or ""),
-        routing_summary=RoutingSummary(
-            next_step=route.get("next_step"),
-            agent_role=route.get("agent_role"),
-            lane=route.get("lane"),
-            routing_reason=route.get("routing_reason"),
-        ),
+        routing_summary=summary,
         checks=list(route.get("checks") or []),
-        route=route,
-        debug_cot=[f"orchestrator entity_id={entity_id}", *list(specialist.get("debug_cot") or [])],
+        route=acted,
+        directives=directives,
+        lane_messages=transcript,
+        debug_cot=list(specialist.get("debug_cot") or []),
     )

@@ -37,3 +37,7 @@ Final Answer: confirm the direct rollover is cleared to process. STOP.
 | Studio | `run_named_write` |
 
 No MCP tools on this agent. The write label is `write_audit_event`.
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Rollover fields include `missing_required_docs` and `missing_spousal_consent`. Do not invent field names. Do not construct `event_json`.

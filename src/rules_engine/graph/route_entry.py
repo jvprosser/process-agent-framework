@@ -27,40 +27,88 @@ def route_entry(
         raise TypeError("route_entry expects an entry JSON dict")
     graph = pack_graph or {}
     playbook = _load_playbook(playbook_path)
+    _validate_playbook(playbook)
     if playbook.get("exception_probes"):
         return _route_with_exceptions(entry, entry_id, playbook, graph)
+    return _route_lanes(entry, entry_id, playbook, graph)
+
+
+def _route_lanes(
+    entry: dict[str, Any],
+    entry_id: int | str,
+    playbook: dict[str, Any],
+    pack_graph: dict[str, Any],
+    *,
+    stop_after_exceptions: bool = False,
+) -> dict[str, Any]:
+    """Blocking gates halt the walk. Each other lane keeps its first match."""
     priorities = list(playbook.get("priorities") or [])
-    probes = playbook.get("probes") or {}
-    matched: list[dict[str, Any]] = []
+    exception_ids = set(playbook.get("exception_probes") or []) if stop_after_exceptions else set()
+    version = _playbook_version(playbook)
+    trace: list[dict[str, Any]] = []
+    directives: list[dict[str, Any]] = []
+    lanes_seen: set[str] = set()
+    exception_hits: list[dict[str, Any]] = []
+    primary: dict[str, Any] | None = None
+
     for idx, probe_id in enumerate(priorities):
-        probe_cfg = probes[probe_id]
-        form = str(probe_cfg.get("form") or "ASK").upper()
-        if str(probe_cfg.get("cel") or "").strip():
-            form = "ASK"
-        result = _exec_probe(entry, probe_cfg, form, graph)
-        action = _match_action(playbook, probe_id, form, result)
-        assigned = action is not None
-        matched.append(_trace_entry(probe_id, probe_cfg, form, result, assigned))
-        if action is not None:
-            return _decision(
+        action, probe = _probe_outcome(entry, playbook, probe_id, pack_graph)
+        if probe_id in exception_ids:
+            trace.append(probe)
+            if action is not None:
+                exception_hits.append(probe)
+            continue
+        if exception_hits:
+            return _exception_review_decision(
+                entry, entry_id, playbook, trace, exception_hits, version
+            )
+        if action is None:
+            trace.append(probe)
+            continue
+        lane = str(action.get("lane") or "").strip()
+        if action.get("blocking") is True:
+            trace.append(probe)
+            decision = _decision(
                 entry_id,
                 action,
-                matched,
+                trace,
                 remaining=priorities[idx + 1 :],
                 terminal=bool(action.get("terminal")),
-                playbook_version=_playbook_version(playbook),
+                playbook_version=version,
             )
+            decision["routing_reason"] = f"{probe['detail']} → {action.get('step')}."
+            if probe.get("cel"):
+                decision["matched_cel"] = probe["cel"]
+            decision["routing_summary"] = format_routing_summary(decision)
+            decision["routing_directives"] = [_directive(probe_id, action, probe)]
+            return decision
+        if lane in lanes_seen:
+            probe["status"] = "skipped"
+            probe["skipped_reason"] = "lane_already_matched"
+            trace.append(probe)
+            continue
+        lanes_seen.add(lane)
+        trace.append(probe)
+        if primary is None:
+            primary = action
+        directives.append(_directive(probe_id, action, probe))
 
-    default = playbook.get("default_action", {})
-    return _decision(
+    if exception_hits:
+        return _exception_review_decision(
+            entry, entry_id, playbook, trace, exception_hits, version
+        )
+    if primary is None:
+        return _default_decision(entry, entry_id, playbook, trace, version)
+    decision = _decision(
         entry_id,
-        default,
-        matched,
+        primary,
+        trace,
         remaining=[],
-        terminal=bool(default.get("terminal", True)),
-        playbook_version=_playbook_version(playbook),
-        reason_text=_default_disposition_reason(entry),
+        terminal=bool(primary.get("terminal")),
+        playbook_version=version,
     )
+    decision["routing_directives"] = directives
+    return decision
 
 
 def _route_with_exceptions(
@@ -69,138 +117,127 @@ def _route_with_exceptions(
     playbook: dict[str, Any],
     pack_graph: dict[str, Any],
 ) -> dict[str, Any]:
-    """Score every exception probe, then first-match the disposition."""
-    priorities = list(playbook.get("priorities") or [])
-    probes = playbook.get("probes") or {}
-    exception_ids = set(playbook.get("exception_probes") or [])
-    trace: list[dict[str, Any]] = []
-    found: list[dict[str, Any]] = []
-    version = _playbook_version(playbook)
+    """Score every document exception into one review, else walk dispositions."""
+    return _route_lanes(
+        entry,
+        entry_id,
+        playbook,
+        pack_graph,
+        stop_after_exceptions=True,
+    )
 
-    for idx, probe_id in enumerate(priorities):
-        probe_cfg = probes[probe_id]
-        form = str(probe_cfg.get("form") or "ASK").upper()
-        if str(probe_cfg.get("cel") or "").strip():
-            form = "ASK"
-        result = _exec_probe(entry, probe_cfg, form, pack_graph)
-        action = _match_action(playbook, probe_id, form, result)
-        probe = _trace_entry(probe_id, probe_cfg, form, result, action is not None)
-        trace.append(probe)
-        if probe_id in exception_ids:
-            if action is not None:
-                found.append(_exception_item(entry, probe_id, probe_cfg, action, probe))
-            continue
-        if action is None:
-            continue
-        if found:
-            return _exception_decision(
-                entry_id,
-                playbook,
-                trace,
-                found,
-                action,
-                remaining=priorities[idx + 1 :],
-                playbook_version=version,
-            )
-        return _decision(
-            entry_id,
-            action,
-            trace,
-            remaining=priorities[idx + 1 :],
-            terminal=bool(action.get("terminal")),
-            playbook_version=version,
-        )
 
-    default = playbook.get("default_action", {})
-    if found:
-        return _exception_decision(
-            entry_id,
-            playbook,
-            trace,
-            found,
-            default,
-            remaining=[],
-            playbook_version=version,
-            entry=entry,
-        )
-    return _decision(
+def _exception_review_decision(
+    entry: dict[str, Any],
+    entry_id: int | str,
+    playbook: dict[str, Any],
+    trace: list[dict[str, Any]],
+    hits: list[dict[str, Any]],
+    version: str | None,
+) -> dict[str, Any]:
+    review = dict(playbook.get("exception_review") or {})
+    details = "; ".join(str(item.get("detail") or "") for item in hits)
+    step = review.get("step")
+    decision = _decision(
+        entry_id,
+        review,
+        trace,
+        remaining=[],
+        terminal=bool(review.get("terminal", True)),
+        playbook_version=version,
+        reason_text=details,
+    )
+    reason = f"{details} → {step}."
+    decision["routing_reason"] = reason
+    decision["routing_summary"] = format_routing_summary(decision)
+    directive = _directive("exception_review", review, {"detail": details})
+    directive["routing_reason"] = reason
+    decision["routing_directives"] = [directive]
+    decision["exceptions"] = [
+        {"probe_id": item.get("probe_id"), "detail": item.get("detail")} for item in hits
+    ]
+    return decision
+
+
+def _default_decision(
+    entry: dict[str, Any],
+    entry_id: int | str,
+    playbook: dict[str, Any],
+    trace: list[dict[str, Any]],
+    version: str | None,
+) -> dict[str, Any]:
+    default = dict(playbook.get("default_action") or {})
+    reason = _default_disposition_reason(entry)
+    decision = _decision(
         entry_id,
         default,
         trace,
         remaining=[],
         terminal=bool(default.get("terminal", True)),
         playbook_version=version,
-        reason_text=_default_disposition_reason(entry),
+        reason_text=reason,
     )
-
-
-def _exception_item(
-    entry: dict[str, Any],
-    probe_id: str,
-    probe_cfg: dict[str, Any],
-    action: dict[str, Any],
-    probe: dict[str, Any],
-) -> dict[str, Any]:
-    item = {
-        "probe_id": probe_id,
-        "next_step": action.get("step"),
-        "detail": probe["detail"],
-    }
-    if probe.get("cel"):
-        item["cel"] = probe["cel"]
-    fields = {}
-    for key in probe_cfg.get("detail_fields") or []:
-        if key in entry:
-            fields[str(key)] = entry[key]
-    if fields:
-        item["fields"] = fields
-    return item
-
-
-def _exception_decision(
-    entry_id: int | str,
-    playbook: dict[str, Any],
-    probe_trace: list[dict[str, Any]],
-    found: list[dict[str, Any]],
-    disposition_action: dict[str, Any],
-    *,
-    remaining: list[str],
-    playbook_version: str | None,
-    entry: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    review = playbook.get("exception_review") or {}
-    decision = _decision(
-        entry_id,
-        review,
-        probe_trace,
-        remaining=remaining,
-        terminal=bool(review.get("terminal", True)),
-        playbook_version=playbook_version,
-    )
-    decision["exceptions"] = found
-    disposition = {
-        "next_step": disposition_action.get("step"),
-        "agent_role": disposition_action.get("agent"),
-        "coworker": _optional_str(disposition_action, "coworker", "coworker_role"),
-        "lane": disposition_action.get("lane"),
-        "write": _optional_str(disposition_action, "write", "write_label"),
-    }
-    reason_code = _optional_str(disposition_action, "reason_code")
-    if reason_code:
-        disposition["reason_code"] = reason_code
-    decision["disposition"] = disposition
-    decision.pop("reason_code", None)
-    decision.pop("matched_cel", None)
-    details = "; ".join(str(item["detail"]) for item in found)
-    step = review.get("step")
-    decision["routing_reason"] = f"{details} → {step}."
-    note = f"Disposition if these exceptions are cleared: {disposition['next_step']}."
-    default_step = (playbook.get("default_action") or {}).get("step")
-    if entry is not None and disposition["next_step"] == default_step:
-        note = f"{note} {_default_disposition_reason(entry)}"
-    decision["disposition_note"] = note
-    decision["routing_summary"] = format_routing_summary(decision)
+    directive = _directive("default_action", default, {"detail": reason})
+    directive["routing_reason"] = decision["routing_reason"]
+    decision["routing_directives"] = [directive]
     return decision
+
+
+def _validate_playbook(playbook: dict[str, Any]) -> None:
+    """Every action, the default, and exception_review declare blocking and lane."""
+    actions = playbook.get("actions") or {}
+    if not isinstance(actions, dict):
+        raise RuntimeError("Playbook actions must be a mapping")
+    for probe_id, entries in actions.items():
+        if not isinstance(entries, list):
+            raise RuntimeError(f"Playbook actions[{probe_id}] must be a list")
+        for index, action in enumerate(entries):
+            _require_blocking_lane(action, f"actions[{probe_id}][{index}]")
+    _require_blocking_lane(playbook.get("default_action") or {}, "default_action")
+    if "exception_review" in playbook:
+        _require_blocking_lane(playbook.get("exception_review") or {}, "exception_review")
+
+
+def _require_blocking_lane(action: dict[str, Any], where: str) -> None:
+    if not isinstance(action, dict) or not isinstance(action.get("blocking"), bool):
+        raise RuntimeError(f"Playbook {where} is missing blocking")
+    lane = action.get("lane")
+    if not isinstance(lane, str) or not lane.strip():
+        raise RuntimeError(f"Playbook {where} is missing lane")
+
+
+def _probe_outcome(
+    entry: dict[str, Any],
+    playbook: dict[str, Any],
+    probe_id: str,
+    pack_graph: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    probe_cfg = (playbook.get("probes") or {})[probe_id]
+    form = str(probe_cfg.get("form") or "ASK").upper()
+    if str(probe_cfg.get("cel") or "").strip():
+        form = "ASK"
+    result = _exec_probe(entry, probe_cfg, form, pack_graph)
+    action = _match_action(playbook, probe_id, form, result)
+    return action, _trace_entry(probe_id, probe_cfg, form, result, action is not None)
+
+
+def _directive(
+    probe_id: str, action: dict[str, Any], probe: dict[str, Any]
+) -> dict[str, Any]:
+    step = action.get("step")
+    detail = probe.get("detail") or ""
+    return {
+        "directive_id": probe_id,
+        "lane": str(action.get("lane") or "").strip(),
+        "agent_role": action.get("agent"),
+        "next_step": step,
+        "routing_reason": f"{detail} → {step}.",
+        "blocking": bool(action.get("blocking")),
+        "terminal": bool(action.get("terminal")),
+        "write": _optional_str(action, "write", "write_label"),
+        "allowed_tools": list(action.get("tools") or []),
+        "letter_on_request": bool(action.get("letter_on_request", False)),
+    }
 
 
 def _default_disposition_reason(_entry: dict[str, Any]) -> str:
@@ -344,15 +381,17 @@ def _decision(
             "A letter is recommended as the next step. "
             "It will not be drafted unless you ask."
         )
-    checks = [
-        {
-            "probe_id": p["probe_id"],
-            "title": p["title"],
-            "status": p["status"],
-            "detail": p["detail"],
+    checks = []
+    for probe in probe_trace:
+        item = {
+            "probe_id": probe["probe_id"],
+            "title": probe["title"],
+            "status": probe["status"],
+            "detail": probe["detail"],
         }
-        for p in probe_trace
-    ]
+        if probe.get("skipped_reason"):
+            item["skipped_reason"] = probe["skipped_reason"]
+        checks.append(item)
     decision = {
         "entry_id": str(entry_id),
         "lane": action.get("lane"),

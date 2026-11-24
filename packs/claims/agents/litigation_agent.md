@@ -105,3 +105,7 @@ Then run_named_write once with label create_litigation_task,
 event_json task_type_code ESCALATE_DISCOVERY.
 Do not save_claim_letter. Return summary + exact JSON.
 ```
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.

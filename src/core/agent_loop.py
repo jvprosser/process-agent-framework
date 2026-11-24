@@ -14,8 +14,10 @@ from core.pack_manager import PackManager
 from core.tools import (
     build_session_graph,
     evaluate_playbook,
+    patch_session_field,
     run_named_query,
     run_named_write,
+    set_assertion_context,
 )
 from mistralai.client import Mistral
 
@@ -26,7 +28,9 @@ _MODEL_ERRORS = (httpx.HTTPError, ConnectionError, TimeoutError)
 _CORE_TOOLS = {
     "run_named_query": run_named_query,
     "run_named_write": run_named_write,
+    "patch_session_field": patch_session_field,
 }
+_LANE_CHARS = re.compile(r"[^A-Za-z0-9_-]")
 
 
 class EntityExtraction(BaseModel):
@@ -96,7 +100,78 @@ def run_intake(entity_id: str, client: Mistral, pack: PackManager) -> dict:
     return route
 
 
-def run_specialist(route_json: dict, client: Mistral, pack: PackManager) -> dict:
+def reject_entity_id(entity_id: str) -> str:
+    """Refuse a session id that could escape the session directory."""
+    entity = str(entity_id or "").strip()
+    if not entity or any(part in entity for part in ("/", "\\", "..")):
+        raise RuntimeError("entity_id is not a safe session name")
+    return entity
+
+
+def sanitize_lane(lane: str) -> str:
+    return _LANE_CHARS.sub("", str(lane or "").strip())
+
+
+def select_directive(
+    directives: list[dict[str, Any]], requested_lane: str | None
+) -> tuple[dict[str, Any] | None, str | None]:
+    """A blocking gate wins. Otherwise the requested lane, else the first directive."""
+    blocking = [item for item in directives if item.get("blocking") is True]
+    if blocking:
+        return blocking[0], None
+    lane = str(requested_lane or "").strip()
+    if lane:
+        match = next((item for item in directives if item.get("lane") == lane), None)
+        if match is None:
+            return None, f"Lane {lane} has no active directive."
+        return match, None
+    if directives:
+        return directives[0], None
+    return None, "No playbook directive is active."
+
+
+def project_directive(
+    directives: list[dict[str, Any]], requested_lane: str | None
+) -> dict[str, Any] | None:
+    """Summary fields follow the gate, the requested lane, then the first directive."""
+    chosen, _notice = select_directive(directives, requested_lane)
+    return chosen
+
+
+def load_lane_transcript(entity_id: str, lane: str) -> list[dict[str, Any]]:
+    entity = reject_entity_id(entity_id)
+    safe_lane = sanitize_lane(lane)
+    if not safe_lane:
+        raise RuntimeError("lane is not a safe session name")
+    path = _lane_path(entity, safe_lane)
+    if not path.is_file():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def save_lane_transcript(entity_id: str, lane: str, messages: list[dict[str, Any]]) -> None:
+    entity = reject_entity_id(entity_id)
+    safe_lane = sanitize_lane(lane)
+    path = _lane_path(entity, safe_lane)
+    path.write_text(json.dumps(messages, indent=2) + "\n", encoding="utf-8")
+
+
+def _lane_path(entity: str, lane: str):
+    from rules_engine.studio_io import session_dir
+
+    return session_dir() / f"entry_{entity}_chat_{lane}.json"
+
+
+def run_specialist(
+    route_json: dict,
+    client: Mistral,
+    pack: PackManager,
+    history: list[dict[str, Any]] | None = None,
+) -> dict:
     """Run the playbook role with only its allowed tools, then summarize."""
     if not isinstance(route_json, dict):
         raise RuntimeError("route_json must be an object")
@@ -116,9 +191,14 @@ def run_specialist(route_json: dict, client: Mistral, pack: PackManager) -> dict
     else:
         route_json["view_data"] = {}
     write_label = _permitted_write(route_json, pack, allowed)
+    set_assertion_context(
+        role=role,
+        lane=str(route_json.get("lane") or ""),
+        http_run_id=str(route_json.get("http_run_id") or ""),
+    )
     bound = _bound_tools(pack, allowed)
     text, invocations, model_logs = _specialist_text(
-        client, prompt, route_json, bound, allowed, write_label, pack
+        client, prompt, route_json, bound, allowed, write_label, pack, history
     )
     logs.extend(model_logs)
     if write_label and not any(item.get("label") == write_label for item in invocations):
@@ -204,6 +284,7 @@ def _specialist_text(
     allowed: list[str],
     write_label: str | None,
     pack: PackManager,
+    history: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, Any]], list[str]]:
     instruction = (
         "Follow the routing JSON. Do not change next_step, agent_role, "
@@ -214,21 +295,29 @@ def _specialist_text(
             f"Call run_named_write once with label {write_label}. "
         )
     instruction += "Then reply with a short plain-language summary."
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": prompt + "\n\n" + instruction},
+    route_brief = json.dumps(
         {
-            "role": "user",
-            "content": json.dumps(
-                {
-                    "routing_summary": route_json.get("routing_summary"),
-                    "next_step": route_json.get("next_step"),
-                    "agent_role": route_json.get("agent_role"),
-                    "write": write_label,
-                    "allowed_tools": allowed,
-                }
-            ),
-        },
+            "routing_summary": route_json.get("routing_summary"),
+            "next_step": route_json.get("next_step"),
+            "agent_role": route_json.get("agent_role"),
+            "write": write_label,
+            "allowed_tools": allowed,
+        }
+    )
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": prompt + "\n\n" + instruction + "\n" + route_brief},
     ]
+    if history:
+        for item in history:
+            role_name = item.get("role")
+            messages.append(
+                {
+                    "role": role_name if role_name in {"user", "assistant"} else "user",
+                    "content": str(item.get("text") or ""),
+                }
+            )
+    else:
+        messages.append({"role": "user", "content": route_brief})
     tools = [_function_spec(tool) for tool in bound]
     try:
         response = _complete(
@@ -332,6 +421,12 @@ def _dispatch_allowed(
     if tool is None:
         return None
     args = _call_args(call)
+    if name == "patch_session_field":
+        return {
+            "tool": name,
+            "label": str(args.get("field") or ""),
+            "result": patch_session_field(str(args.get("field") or ""), args.get("value")),
+        }
     if name == "run_named_write":
         label = write_label or ""
         params = _write_params(route_json, pack)
@@ -380,7 +475,7 @@ def _bound_tools(pack: PackManager, allowed: list[str]) -> list[Any]:
     allowed_set = set(allowed)
     reads = set((pack.catalog.get("reads") or {}))
     writes = set((pack.catalog.get("writes") or {}))
-    bound = []
+    bound = [patch_session_field]
     if "run_named_write" in allowed_set or allowed_set & writes:
         bound.append(run_named_write)
     if "run_named_query" in allowed_set or allowed_set & reads:

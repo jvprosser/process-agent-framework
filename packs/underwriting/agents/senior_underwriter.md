@@ -43,3 +43,7 @@ Never Delegate. Never invent Observation results. Do not run structured intake.
 | Studio | `run_named_query`, `run_named_write` |
 
 No MCP tools on this agent. The write label is `write_referral_queue`.
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Underwriting fields include `naics_code` and `flood_zone`. Do not invent field names. Do not construct `event_json`.

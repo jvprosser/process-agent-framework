@@ -57,6 +57,7 @@ exception_review:
   agent: UnderwritingReviewAgent
   coworker: Underwriting Review Agent
   lane: REVIEW
+  blocking: true
   write: write_audit_event
   tools: [write_audit_event]
   terminal: true
@@ -185,6 +186,7 @@ actions:
       step: FixDataQuality
       agent: DataQualityAgent
       lane: DATA_QUALITY
+      blocking: true
       write: write_audit_event
       tools: [build_claim_graph, validate_claim_graph, write_audit_event]
   P0C_LOW_OCR_CONFIDENCE:
@@ -193,6 +195,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -203,6 +206,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -213,6 +217,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -223,6 +228,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -233,6 +239,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -243,6 +250,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -253,6 +261,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -263,6 +272,7 @@ actions:
       agent: UnderwritingIntakeSpecialist
       coworker: Underwriting Intake Specialist
       lane: DECLINE
+      blocking: true
       write: write_submission_decline
       reason_code: OUT_OF_APPETITE
       letter_on_request: true
@@ -274,6 +284,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: true
@@ -284,6 +295,7 @@ actions:
       agent: UnderwritingIntakeSpecialist
       coworker: Underwriting Intake Specialist
       lane: DECLINE
+      blocking: true
       write: write_submission_decline
       reason_code: OUT_OF_APPETITE
       letter_on_request: true
@@ -294,6 +306,7 @@ actions:
       step: AssignUnderwriter
       agent: DataQualityAgent
       lane: DATA_QUALITY
+      blocking: true
       write: write_audit_event
       tools: [build_claim_graph, write_audit_event]
   P10_SIU_HIGH_RISK_TRIGGER:
@@ -302,6 +315,7 @@ actions:
       agent: UnderwritingReviewAgent
       coworker: Underwriting Review Agent
       lane: REVIEW
+      blocking: true
       write: write_audit_event
       tools: [write_audit_event]
       terminal: false
@@ -312,6 +326,7 @@ actions:
       agent: RiskEngineeringSpecialist
       coworker: Risk Engineering Specialist
       lane: ENRICHMENT
+      blocking: false
       write: write_data_enrichment_request
       task_type_code: INSPECTION
       tools: [write_data_enrichment_request]
@@ -323,6 +338,7 @@ actions:
       agent: RiskEngineeringSpecialist
       coworker: Risk Engineering Specialist
       lane: ENRICHMENT
+      blocking: false
       write: write_audit_event
       tools: [write_audit_event]
       terminal: false
@@ -333,6 +349,7 @@ actions:
       agent: SeniorUnderwriter
       coworker: Senior Underwriter
       lane: REFERRAL
+      blocking: false
       write: write_referral_queue
       tools: [get_senior_uw_referral_context, write_referral_queue]
       terminal: false
@@ -343,6 +360,7 @@ actions:
       agent: SeniorUnderwriter
       coworker: Senior Underwriter
       lane: REFERRAL
+      blocking: false
       write: write_referral_queue
       tools: [get_senior_uw_referral_context, write_referral_queue]
       terminal: false
@@ -353,6 +371,7 @@ actions:
       agent: RatingSpecialist
       coworker: Rating Specialist
       lane: BIND
+      blocking: false
       write: write_quote_issuance
       tools: [write_quote_issuance]
       terminal: true
@@ -364,6 +383,7 @@ default_action:
   agent: UnderwritingReviewAgent
   coworker: Underwriting Review Agent
   lane: REVIEW
+  blocking: true
   write: write_audit_event
   tools: [write_audit_event]
   terminal: false

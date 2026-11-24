@@ -204,3 +204,7 @@ What are my current open claims?
 Expect **401**, **402**, **404**.
 
 Operator identity check (not a handler chat): `Call get_server_info once and stop.` Expect `INS_CLAIMS_MCP_V14`.
+
+## Session facts
+
+When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
