@@ -6,6 +6,7 @@ Set the application Script field to serve.py at the project root.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -37,7 +38,63 @@ from fastapi.staticfiles import StaticFiles
 from api.action import router as action_router
 from api.chat import router
 
+
+def _allowed_ui_origins() -> set[str]:
+    raw = os.getenv("PROCESS_AGENT_UI_ORIGIN", "")
+    return {part.strip().rstrip("/") for part in raw.split(",") if part.strip()}
+
+
+def _request_origin(scope) -> str:
+    for key, value in scope.get("headers") or []:
+        if key.lower() == b"origin":
+            return value.decode("latin-1").strip().rstrip("/")
+    return ""
+
+
+def _cors_headers(origin: str) -> list[tuple[bytes, bytes]]:
+    return [
+        (b"access-control-allow-origin", origin.encode("latin-1")),
+        (b"access-control-allow-methods", b"POST, OPTIONS"),
+        (b"access-control-allow-headers", b"Content-Type"),
+        (b"vary", b"Origin"),
+    ]
+
+
+class UiCorsMiddleware:
+    """Allow one separate UI application to call this API from the browser."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        origin = _request_origin(scope)
+        allowed = bool(origin) and origin in _allowed_ui_origins()
+        if allowed and scope["method"] == "OPTIONS":
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 204,
+                    "headers": _cors_headers(origin),
+                }
+            )
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        async def send_with_cors(message):
+            if allowed and message["type"] == "http.response.start":
+                headers = list(message.get("headers") or [])
+                headers.extend(_cors_headers(origin))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
 app = FastAPI(title="Process agent")
+app.add_middleware(UiCorsMiddleware)
 app.include_router(router)
 app.include_router(action_router)
 app.mount(

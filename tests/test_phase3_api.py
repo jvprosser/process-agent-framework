@@ -161,3 +161,39 @@ def test_claims_pack_defaults_to_trino(monkeypatch, tmp_path: Path):
     assert omitted.json()["meta"]["dialect"] == "trino"
     assert forced.status_code == 200
     assert forced.json()["meta"]["dialect"] == "impala"
+
+
+def test_cors_preflight_allows_configured_ui_origin(monkeypatch):
+    monkeypatch.setenv("PROCESS_AGENT_UI_ORIGIN", "https://ui.example/")
+    response = TestClient(app).options(
+        "/api/v1/chat",
+        headers={
+            "Origin": "https://ui.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 204
+    assert response.headers["access-control-allow-origin"] == "https://ui.example"
+    assert response.headers["access-control-allow-headers"] == "Content-Type"
+
+
+def test_cors_chat_response_carries_ui_origin(monkeypatch):
+    monkeypatch.setenv("PROCESS_AGENT_UI_ORIGIN", "https://ui.example, https://other.example")
+    response = TestClient(app).post(
+        "/api/v1/chat",
+        headers={"Origin": "https://other.example"},
+        json={},
+    )
+    assert response.status_code == 422
+    assert response.headers["access-control-allow-origin"] == "https://other.example"
+
+
+def test_cors_omits_header_for_unknown_origin(monkeypatch):
+    monkeypatch.setenv("PROCESS_AGENT_UI_ORIGIN", "https://ui.example")
+    response = TestClient(app).post(
+        "/api/v1/chat",
+        headers={"Origin": "https://elsewhere.example"},
+        json={},
+    )
+    assert "access-control-allow-origin" not in response.headers
