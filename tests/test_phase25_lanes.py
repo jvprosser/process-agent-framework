@@ -91,6 +91,13 @@ def test_each_lane_keeps_its_first_match_and_records_the_skip():
     assert "BI" in lanes
     skipped = [item for item in decision["checks"] if item.get("skipped_reason") == "lane_already_matched"]
     assert any(item["probe_id"] == "R2.1" for item in skipped)
+    assigned = next(item for item in decision["checks"] if item["probe_id"] == "R2.0")
+    assert assigned["status"] == "assigned"
+    assert assigned["lane"] == "PD"
+    assert next(item for item in skipped if item["probe_id"] == "R2.1")["lane"] == "PD"
+    missed = next(item for item in decision["checks"] if item["probe_id"] == "R2.3")
+    assert missed["status"] == "did_not_apply"
+    assert missed["lane"] == "DATA_QUALITY"
 
 
 def test_underwriting_exceptions_emit_one_review_directive():
@@ -108,6 +115,14 @@ def test_underwriting_exceptions_emit_one_review_directive():
     assert review["blocking"] is True
     assert review["next_step"] == "RESOLVE_DOCUMENT_EXCEPTIONS"
     assert all(item["lane"] != "DECLINE" for item in decision["routing_directives"])
+    pack = PackManager("underwriting", str(PACKS))
+    exception_ids = set(pack.playbook.get("exception_probes") or [])
+    exception_checks = [item for item in decision["checks"] if item["probe_id"] in exception_ids]
+    assert exception_checks
+    assert all(item["lane"] == "REVIEW" for item in exception_checks)
+    earlier = next(item for item in decision["checks"] if item["probe_id"] == "R0.1")
+    assert earlier["status"] == "did_not_apply"
+    assert earlier["lane"] == "DATA_QUALITY"
 
 
 def test_retirement_packs_emit_directives_with_explicit_lanes():

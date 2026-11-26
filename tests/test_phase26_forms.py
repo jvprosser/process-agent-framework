@@ -97,7 +97,7 @@ def test_synthesis_names_the_stored_value_and_stays_on_the_speaking_lane():
                 "blocking": True,
             }
         ],
-        [{"probe_id": "R0.1", "title": "Claim on file", "status": "assigned"}],
+        [{"probe_id": "R0.1", "title": "Claim on file", "status": "assigned", "lane": "DATA_QUALITY"}],
         [],
         "PD",
         playbook,

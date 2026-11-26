@@ -54,6 +54,7 @@ def _route_lanes(
     for idx, probe_id in enumerate(priorities):
         action, probe = _probe_outcome(entry, playbook, probe_id, pack_graph)
         if probe_id in exception_ids:
+            probe["lane"] = _review_lane(playbook)
             trace.append(probe)
             if action is not None:
                 exception_hits.append(probe)
@@ -63,9 +64,11 @@ def _route_lanes(
                 entry, entry_id, playbook, trace, exception_hits, version
             )
         if action is None:
+            probe["lane"] = _shared_action_lane(playbook, probe_id)
             trace.append(probe)
             continue
         lane = str(action.get("lane") or "").strip()
+        probe["lane"] = lane or None
         if action.get("blocking") is True:
             trace.append(probe)
             decision = _decision(
@@ -283,6 +286,27 @@ def _validate_form_fields(
             raise RuntimeError(f"Playbook form '{form_id}' field '{name}' select is missing options")
 
 
+def _review_lane(playbook: dict[str, Any]) -> str | None:
+    lane = str((playbook.get("exception_review") or {}).get("lane") or "").strip()
+    return lane or None
+
+
+def _shared_action_lane(playbook: dict[str, Any], probe_id: str) -> str | None:
+    """One lane when every candidate action agrees. None when they disagree."""
+    entries = (playbook.get("actions") or {}).get(probe_id) or []
+    lanes: list[str] = []
+    if isinstance(entries, list):
+        for action in entries:
+            if not isinstance(action, dict):
+                continue
+            lane = str(action.get("lane") or "").strip()
+            if lane and lane not in lanes:
+                lanes.append(lane)
+    if len(lanes) == 1:
+        return lanes[0]
+    return None
+
+
 def _require_blocking_lane(action: dict[str, Any], where: str) -> None:
     if not isinstance(action, dict) or not isinstance(action.get("blocking"), bool):
         raise RuntimeError(f"Playbook {where} is missing blocking")
@@ -477,6 +501,7 @@ def _decision(
             "title": probe["title"],
             "status": probe["status"],
             "detail": probe["detail"],
+            "lane": probe.get("lane"),
         }
         if probe.get("skipped_reason"):
             item["skipped_reason"] = probe["skipped_reason"]

@@ -96,10 +96,11 @@ class RoutingSummary(BaseModel):
 
 
 class CheckItem(BaseModel):
-    probe_id: str | None = None
-    title: str | None = None
-    status: str | None = None
-    detail: str | None = None
+    probe_id: str
+    title: str
+    status: Literal["assigned", "did_not_apply", "skipped"]
+    lane: str | None = None
+    detail: Any | None = None
     skipped_reason: str | None = None
 
 

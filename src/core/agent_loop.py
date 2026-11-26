@@ -243,7 +243,12 @@ def synthesize_lane_response(
             active = [str(item.get("lane") or "") for item in rows if item.get("lane")]
             listed = ", ".join(active) if active else "none"
             parts.append(f"{lane} has no remaining active probes. Active lanes: {listed}.")
-    clause = _check_clause(checks or [], lane, playbook or {})
+    gate_lanes = {
+        str(item.get("lane") or "")
+        for item in rows
+        if item.get("blocking") is True and item.get("lane")
+    }
+    clause = _check_clause(checks or [], lane, gate_lanes)
     if clause:
         parts.append(clause)
     return " ".join(parts)
@@ -258,34 +263,17 @@ def _fact_text(value: Any) -> str:
 def _check_clause(
     checks: list[dict[str, Any]],
     speaking_lane: str,
-    playbook: dict[str, Any],
+    gate_lanes: set[str],
 ) -> str:
     pieces: list[str] = []
     for check in checks:
-        action = _playbook_action(playbook, check.get("probe_id"))
-        action_lane = str(action.get("lane") or "")
-        if action_lane != speaking_lane and action.get("blocking") is not True:
+        check_lane = str(check.get("lane") or "")
+        if not check_lane or (check_lane != speaking_lane and check_lane not in gate_lanes):
             continue
         pieces.append(f"{check.get('title')} ({check.get('status')})")
     if not pieces:
         return ""
     return "Checks: " + "; ".join(pieces) + "."
-
-
-def _playbook_action(playbook: dict[str, Any], probe_id: Any) -> dict[str, Any]:
-    key = str(probe_id or "")
-    if key == "default_action":
-        action = playbook.get("default_action") or {}
-        return action if isinstance(action, dict) else {}
-    if key == "exception_review":
-        action = playbook.get("exception_review") or {}
-        return action if isinstance(action, dict) else {}
-    entries = (playbook.get("actions") or {}).get(key)
-    if isinstance(entries, list):
-        for action in entries:
-            if isinstance(action, dict):
-                return action
-    return {}
 
 
 def load_lane_transcript(entity_id: str, lane: str) -> list[dict[str, Any]]:
