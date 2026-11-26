@@ -350,6 +350,17 @@ def _specialist_text(
 
 def _sanitize_chat_text(raw_text: str) -> str:
     """Drop leaked chain-of-thought and XML tool calls from the UI reply."""
+    raw = raw_text or ""
+    closer = re.search(r"</think>", raw, flags=re.IGNORECASE)
+    if closer and _TOOL_CALL_BLOCK.search(raw[closer.end() :]):
+        after = _remainder_after_think(raw[closer.end() :])
+        if after:
+            return after
+        return ""
+    return _remainder_after_think(raw)
+
+
+def _remainder_after_think(raw_text: str) -> str:
     clean = _THINK_BLOCK.sub("", raw_text or "")
     clean = re.sub(r"<think>.*", "", clean, flags=re.DOTALL | re.IGNORECASE)
     clean = re.sub(r"</think>", "", clean, flags=re.IGNORECASE)

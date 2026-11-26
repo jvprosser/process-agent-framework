@@ -85,6 +85,19 @@ def test_stray_think_closer_is_removed_from_chat_text():
     assert "<think>" not in _sanitize_chat_text("<think>hidden reasoning without a closer")
 
 
+def test_reasoning_before_think_closer_and_tool_call_is_not_the_reply():
+    raw = (
+        "We need to process claim 401. Let's first call run_named_query.\n"
+        "</think>\n"
+        "<tool_call>\n"
+        "<function=run_named_query>\n"
+        "<parameter=label>\nget_pd_view\n</parameter>\n"
+        "</function>\n"
+        "</tool_call>"
+    )
+    assert _sanitize_chat_text(raw) == ""
+
+
 def test_get_claim_spine_logs_the_rendered_sql(capsys):
     seen: list[str] = []
 
