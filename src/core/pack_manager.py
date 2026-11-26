@@ -53,6 +53,13 @@ class PackManager:
         self.ontology = self.load_ontology()
         self.playbook = self.load_playbook()
         self.catalog = self.load_catalog()
+        from rules_engine.graph.route_entry import validate_playbook_forms
+
+        validate_playbook_forms(
+            self.playbook,
+            set(self.ontology_field_names()),
+            dict(self.manifest.get("graph") or {}),
+        )
         self._activate()
 
     def load_ontology(self) -> dict[str, Any]:

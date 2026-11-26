@@ -12,6 +12,24 @@ version: 1
 schema_relpath: ontology/claims.json
 expr: cel
 
+forms:
+  collect_incident_report:
+    title: Incident report number
+    submit_intent: submit_fact_form
+    fields:
+      - id: incident_report_number
+        type: text
+        label: Incident report number
+        required: true
+  confirm_police_report_status:
+    title: Police report on file
+    submit_intent: submit_fact_form
+    fields:
+      - id: has_police_report
+        type: boolean
+        label: Police report on file
+        required: true
+
 # Priority evaluation order (first-match-wins):
 #   FNOL notice:        F0 already triaged, F1 no coverage, F2 injury/third-party,
 #                       F3 excluded peril/asset, F4 unlisted operator, F5 over
@@ -503,6 +521,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      form: collect_incident_report
       blocking: false
       write: create_pd_task
       task_type_code: COLLECT_INCIDENT_NUMBER
@@ -515,6 +534,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      form: collect_incident_report
       blocking: false
       write: write_audit_event
       letter_on_request: false
@@ -526,6 +546,7 @@ actions:
       agent: PdClaimsAgent
       coworker: PD Claims Agent
       lane: PD
+      form: confirm_police_report_status
       blocking: false
       write: create_pd_task
       task_type_code: REQUEST_POLICE_REPORT

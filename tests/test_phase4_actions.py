@@ -123,7 +123,7 @@ def test_actions_stay_empty_without_a_letter(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["content"]["view_data"] == {}
-    assert body["actions"] == {"quick_replies": [], "tool_invocations": []}
+    assert body["actions"] == {"quick_replies": [], "tool_invocations": [], "pending_forms": []}
     assert ("query", "get_pd_view") not in QUERIES
 
 

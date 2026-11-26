@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 
 from core.agent_loop import (
+    build_layout,
     load_lane_transcript,
+    pending_forms_for,
     project_directive,
     reject_entity_id,
     run_intake,
@@ -21,6 +23,7 @@ from core.agent_loop import (
     run_specialist,
     save_lane_transcript,
     select_directive,
+    synthesize_lane_response,
 )
 from core.mistral_client import local_client
 from core.pack_manager import PackManager
@@ -57,10 +60,32 @@ class Meta(BaseModel):
     debug_cot: list[str] = Field(default_factory=list)
 
 
+LayoutTemplate = Literal["split_pane", "tile_grid"]
+FormFieldType = Literal["text", "number", "boolean", "date", "select"]
+
+
+class FormFieldSchema(BaseModel):
+    id: str
+    type: FormFieldType
+    label: str
+    required: bool = True
+    options: list[str] | None = None
+
+
+class PendingForm(BaseModel):
+    form_id: str
+    lane: str
+    title: str
+    submit_intent: str
+    fields: list[FormFieldSchema] = Field(default_factory=list)
+
+
 class Layout(BaseModel):
-    template: str
-    widgets: list[str]
-    focus: str
+    template: LayoutTemplate = "split_pane"
+    widgets: list[str] = Field(
+        default_factory=lambda: ["chat_feed", "routing_summary_panel"]
+    )
+    focus: str = "chat_feed"
 
 
 class RoutingSummary(BaseModel):
@@ -89,6 +114,7 @@ class RoutingDirective(BaseModel):
     write: str | None = None
     allowed_tools: list[str] = Field(default_factory=list)
     letter_on_request: bool = False
+    form: str | None = None
 
 
 class LaneMessage(BaseModel):
@@ -112,6 +138,7 @@ class Content(BaseModel):
 class Actions(BaseModel):
     quick_replies: list[str] = Field(default_factory=list)
     tool_invocations: list[Any] = Field(default_factory=list)
+    pending_forms: list[PendingForm] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -121,17 +148,21 @@ class ChatResponse(BaseModel):
     actions: Actions
 
 
-def _layout() -> Layout:
-    return Layout(
-        template="split_pane",
-        widgets=["chat_feed", "routing_summary_panel"],
-        focus="chat_feed",
-    )
+def _layout(
+    directives: list[dict[str, Any]] | None = None,
+    forms: list[dict[str, Any]] | None = None,
+) -> Layout:
+    return Layout.model_validate(build_layout(directives, forms))
 
 
-def _actions(route: dict[str, Any] | None, entity_id: str | None) -> Actions:
+def _actions(
+    route: dict[str, Any] | None,
+    entity_id: str | None,
+    forms: list[dict[str, Any]] | None = None,
+) -> Actions:
+    pending = [PendingForm.model_validate(item) for item in (forms or [])]
     if not route or route.get("letter_on_request") is not True or not entity_id:
-        return Actions(quick_replies=[], tool_invocations=[])
+        return Actions(quick_replies=[], tool_invocations=[], pending_forms=pending)
     return Actions(
         quick_replies=["Please write the recommended letter."],
         tool_invocations=[
@@ -141,6 +172,7 @@ def _actions(route: dict[str, Any] | None, entity_id: str | None) -> Actions:
                 "payload": {"entry_id": entity_id},
             }
         ],
+        pending_forms=pending,
     )
 
 
@@ -182,7 +214,9 @@ def _response(
     active_lane: str | None = None,
     directives: list[dict[str, Any]] | None = None,
     lane_messages: list[dict[str, Any]] | None = None,
+    playbook: dict[str, Any] | None = None,
 ) -> ChatResponse:
+    forms = pending_forms_for(directives, playbook)
     return ChatResponse(
         meta=Meta(
             pack_id=pack_id,
@@ -193,7 +227,7 @@ def _response(
             dialect=dialect,
             debug_cot=list(debug_cot or []),
         ),
-        layout=_layout(),
+        layout=_layout(directives, forms),
         content=Content(
             chat_text=chat_text,
             lane_messages=[LaneMessage.model_validate(item) for item in (lane_messages or [])],
@@ -205,7 +239,7 @@ def _response(
             view_data=_view_data(route),
             session_graph=_session_graph(entity_id),
         ),
-        actions=_actions(route, entity_id),
+        actions=_actions(route, entity_id, forms),
     )
 
 
@@ -252,6 +286,26 @@ def _directives_of(route: dict[str, Any]) -> list[dict[str, Any]]:
             "letter_on_request": bool(route.get("letter_on_request")),
         }
     ]
+
+
+def _recorded_facts(entity_id: str, http_run_id: str) -> dict[str, Any]:
+    """Sidecar values stamped with this request. Empty when the turn stored nothing."""
+    from rules_engine.studio_io import session_dir
+
+    path = session_dir() / f"entry_{entity_id}_overrides.json"
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    found: dict[str, Any] = {}
+    for field, meta in payload.items():
+        if isinstance(meta, dict) and meta.get("http_run_id") == http_run_id:
+            found[str(field)] = meta.get("value")
+    return found
 
 
 def _stamp(role: str, agent_role: str | None, lane: str, text: str) -> dict[str, Any]:
@@ -311,6 +365,7 @@ def chat(request: ChatRequest) -> ChatResponse:
                 checks=list(route.get("checks") or []),
                 directives=directives,
                 debug_cot=[*orchestrator_note, *list(route.get("debug_cot") or [])],
+                playbook=pack.playbook,
             )
 
         active_lane = str(selected.get("lane") or "")
@@ -322,10 +377,6 @@ def chat(request: ChatRequest) -> ChatResponse:
         transcript = load_lane_transcript(entity_id, active_lane)
         transcript.append(_stamp("user", None, active_lane, request.user_text))
         specialist = run_specialist(spoken, client, pack, transcript)
-        transcript.append(
-            _stamp("assistant", selected.get("agent_role"), active_lane, str(specialist.get("text") or ""))
-        )
-        save_lane_transcript(entity_id, active_lane, transcript)
         if state_mutated():
             flush_fact_assertions(entity_id)
             pack.activate()
@@ -334,9 +385,26 @@ def chat(request: ChatRequest) -> ChatResponse:
             directives = _directives_of(route)
         projected = project_directive(directives, request.lane) or selected
         summary = _summary_from(projected)
+        forms = pending_forms_for(directives, pack.playbook)
+        chat_text = synthesize_lane_response(
+            directives,
+            list(route.get("checks") or []),
+            forms,
+            active_lane,
+            pack.playbook,
+            _recorded_facts(entity_id, run_id),
+        )
+        transcript.append(
+            _stamp("assistant", selected.get("agent_role"), active_lane, chat_text)
+        )
+        save_lane_transcript(entity_id, active_lane, transcript)
         acted = dict(spoken)
         acted["letter_on_request"] = bool(projected.get("letter_on_request"))
         acted["view_data"] = specialist.get("route_json", {}).get("view_data")
+        specialist_text = str(specialist.get("text") or "").strip()
+        debug_cot = list(specialist.get("debug_cot") or [])
+        if specialist_text:
+            debug_cot.append(specialist_text)
     except Exception as exc:
         return _response(
             pack_id=request.pack_id,
@@ -354,11 +422,12 @@ def chat(request: ChatRequest) -> ChatResponse:
         active_lane=active_lane,
         terminal=bool(projected.get("terminal", False)),
         dialect=dialect,
-        chat_text=str(specialist.get("text") or ""),
+        chat_text=chat_text,
         routing_summary=summary,
         checks=list(route.get("checks") or []),
         route=acted,
         directives=directives,
         lane_messages=transcript,
-        debug_cot=list(specialist.get("debug_cot") or []),
+        debug_cot=debug_cot,
+        playbook=pack.playbook,
     )

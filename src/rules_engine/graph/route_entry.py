@@ -27,7 +27,7 @@ def route_entry(
         raise TypeError("route_entry expects an entry JSON dict")
     graph = pack_graph or {}
     playbook = _load_playbook(playbook_path)
-    _validate_playbook(playbook)
+    _validate_playbook(playbook, pack_graph)
     if playbook.get("exception_probes"):
         return _route_with_exceptions(entry, entry_id, playbook, graph)
     return _route_lanes(entry, entry_id, playbook, graph)
@@ -183,7 +183,19 @@ def _default_decision(
     return decision
 
 
-def _validate_playbook(playbook: dict[str, Any]) -> None:
+_RESERVED_FORM_FIELDS = {
+    "entry_exists",
+    "next_step",
+    "agent_role",
+    "lane",
+    "write",
+    "allowed_tools",
+    "run_id",
+}
+_TEXT_FIELD_TYPES = {"text", "date", "select"}
+
+
+def _validate_playbook(playbook: dict[str, Any], pack_graph: dict[str, Any] | None = None) -> None:
     """Every action, the default, and exception_review declare blocking and lane."""
     actions = playbook.get("actions") or {}
     if not isinstance(actions, dict):
@@ -196,6 +208,79 @@ def _validate_playbook(playbook: dict[str, Any]) -> None:
     _require_blocking_lane(playbook.get("default_action") or {}, "default_action")
     if "exception_review" in playbook:
         _require_blocking_lane(playbook.get("exception_review") or {}, "exception_review")
+    validate_playbook_forms(playbook, graph=pack_graph)
+
+
+def validate_playbook_forms(
+    playbook: dict[str, Any],
+    ontology_fields: set[str] | None = None,
+    graph: dict[str, Any] | None = None,
+) -> None:
+    """Action form ids must name a forms entry. Probe form: ASK is not a form id."""
+    forms = playbook.get("forms") or {}
+    if forms and not isinstance(forms, dict):
+        raise RuntimeError("Playbook forms must be a mapping")
+    for form_id, where in _action_form_refs(playbook):
+        spec = forms.get(form_id) if isinstance(forms, dict) else None
+        if not isinstance(spec, dict):
+            raise RuntimeError(f"Playbook {where} form '{form_id}' is not defined")
+        _validate_form_fields(form_id, spec, ontology_fields, graph)
+
+
+def _action_form_refs(playbook: dict[str, Any]) -> list[tuple[str, str]]:
+    refs: list[tuple[str, str]] = []
+    actions = playbook.get("actions") or {}
+    if isinstance(actions, dict):
+        for probe_id, entries in actions.items():
+            if not isinstance(entries, list):
+                continue
+            for index, action in enumerate(entries):
+                form_id = _action_form_id(action)
+                if form_id:
+                    refs.append((form_id, f"actions[{probe_id}][{index}]"))
+    for where in ("default_action", "exception_review"):
+        form_id = _action_form_id(playbook.get(where))
+        if form_id:
+            refs.append((form_id, where))
+    return refs
+
+
+def _action_form_id(action: Any) -> str:
+    if not isinstance(action, dict):
+        return ""
+    return str(action.get("form") or "").strip()
+
+
+def _validate_form_fields(
+    form_id: str,
+    spec: dict[str, Any],
+    ontology_fields: set[str] | None,
+    graph: dict[str, Any] | None,
+) -> None:
+    fields = spec.get("fields") or []
+    if not isinstance(fields, list):
+        raise RuntimeError(f"Playbook form '{form_id}' fields must be a list")
+    strings = set((graph or {}).get("strings") or [])
+    numbers = set((graph or {}).get("numbers") or [])
+    booleans = set((graph or {}).get("booleans") or [])
+    for field in fields:
+        if not isinstance(field, dict):
+            raise RuntimeError(f"Playbook form '{form_id}' has a field that is not a mapping")
+        name = str(field.get("id") or "").strip()
+        kind = str(field.get("type") or "").strip()
+        if not name or not kind:
+            raise RuntimeError(f"Playbook form '{form_id}' has a field missing id or type")
+        if ontology_fields is not None and (name in _RESERVED_FORM_FIELDS or name not in ontology_fields):
+            raise RuntimeError(f"Playbook form '{form_id}' field '{name}' is not an ontology fact")
+        if graph is not None:
+            if kind == "boolean" and name not in booleans:
+                raise RuntimeError(f"Playbook form '{form_id}' field '{name}' type {kind} disagrees with graph")
+            if kind == "number" and name not in numbers:
+                raise RuntimeError(f"Playbook form '{form_id}' field '{name}' type {kind} disagrees with graph")
+            if kind in _TEXT_FIELD_TYPES and name not in strings:
+                raise RuntimeError(f"Playbook form '{form_id}' field '{name}' type {kind} disagrees with graph")
+        if kind == "select" and not field.get("options"):
+            raise RuntimeError(f"Playbook form '{form_id}' field '{name}' select is missing options")
 
 
 def _require_blocking_lane(action: dict[str, Any], where: str) -> None:
@@ -226,7 +311,7 @@ def _directive(
 ) -> dict[str, Any]:
     step = action.get("step")
     detail = probe.get("detail") or ""
-    return {
+    directive = {
         "directive_id": probe_id,
         "lane": str(action.get("lane") or "").strip(),
         "agent_role": action.get("agent"),
@@ -238,6 +323,10 @@ def _directive(
         "allowed_tools": list(action.get("tools") or []),
         "letter_on_request": bool(action.get("letter_on_request", False)),
     }
+    form_id = _action_form_id(action)
+    if form_id:
+        directive["form"] = form_id
+    return directive
 
 
 def _default_disposition_reason(_entry: dict[str, Any]) -> str:

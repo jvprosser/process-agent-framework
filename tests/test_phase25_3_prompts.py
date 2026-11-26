@@ -142,12 +142,14 @@ def test_think_blocks_stay_in_debug_cot(monkeypatch, tmp_path):
         tmp_path,
         _Message(content=f"<think>Call get_pd_view then create_pd_task.</think>\n{visible}"),
     )
-    assert body["content"]["chat_text"] == visible
+    assert body["content"]["chat_text"] != visible
     assistant = [item["text"] for item in body["content"]["lane_messages"] if item["role"] == "assistant"]
-    assert assistant == [visible]
+    assert assistant == [body["content"]["chat_text"]]
     assert "<think>" not in body["content"]["chat_text"]
     assert all("<think>" not in item for item in assistant)
-    assert "<think>" in "\n".join(body["meta"]["debug_cot"])
+    cot = "\n".join(body["meta"]["debug_cot"])
+    assert visible in cot
+    assert "<think>" in cot
 
 
 def test_structured_thinking_chunks_stay_in_debug_cot(monkeypatch, tmp_path):
@@ -163,14 +165,15 @@ def test_structured_thinking_chunks_stay_in_debug_cot(monkeypatch, tmp_path):
             reasoning_content="sdk reasoning stays off the chat transcript",
         ),
     )
-    assert body["content"]["chat_text"] == visible
+    assert visible not in body["content"]["chat_text"]
     assistant = [item["text"] for item in body["content"]["lane_messages"] if item["role"] == "assistant"]
-    assert assistant == [visible]
+    assert assistant == [body["content"]["chat_text"]]
     cot = "\n".join(body["meta"]["debug_cot"])
+    assert visible in cot
     assert "CollectIncidentReportNumber" in cot
     assert "sdk reasoning stays off the chat transcript" in cot
     assert "sdk reasoning" not in body["content"]["chat_text"]
-    assert "CollectIncidentReportNumber" not in body["content"]["chat_text"]
+    assert "The stale step is" not in body["content"]["chat_text"]
 
 
 def test_thought_tags_stay_in_debug_cot(monkeypatch, tmp_path):
@@ -180,9 +183,11 @@ def test_thought_tags_stay_in_debug_cot(monkeypatch, tmp_path):
         tmp_path,
         _Message(content=f"<thought>Do not call create_pd_task.</thought>{visible}"),
     )
-    assert body["content"]["chat_text"] == visible
+    assert visible not in body["content"]["chat_text"]
     assert "<thought>" not in body["content"]["chat_text"]
-    assert "<thought>" in "\n".join(body["meta"]["debug_cot"])
+    cot = "\n".join(body["meta"]["debug_cot"])
+    assert visible in cot
+    assert "<thought>" in cot
 
 
 def test_patch_turn_skips_the_stale_write(monkeypatch, tmp_path):
@@ -196,6 +201,8 @@ def test_patch_turn_skips_the_stale_write(monkeypatch, tmp_path):
         _Message(content="Recorded the incident report number.", tool_calls=[call]),
     )
     assert "create_pd_task" not in writes
-    assert body["content"]["chat_text"] == "Recorded the incident report number."
+    assert "Recorded the incident report number." in "\n".join(body["meta"]["debug_cot"])
+    assert "incident_report_number INC-2025-9999" in body["content"]["chat_text"]
+    assert "RequestPoliceReport" in body["content"]["chat_text"]
     stored = json.loads((tmp_path / "entry_401_overrides.json").read_text(encoding="utf-8"))
     assert stored["incident_report_number"]["value"] == "INC-2025-9999"

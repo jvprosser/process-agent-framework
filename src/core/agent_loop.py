@@ -142,6 +142,152 @@ def project_directive(
     return chosen
 
 
+def build_layout(
+    routing_directives: list[dict[str, Any]] | None,
+    pending_forms: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """Tile when several lanes or a form are on screen. Otherwise the split pane."""
+    forms = list(pending_forms or [])
+    directives = list(routing_directives or [])
+    if len(directives) > 1 or forms:
+        widgets = [
+            "chat_feed",
+            "routing_summary_panel",
+            "active_directives",
+            "data_entry_panel",
+            "rule_probes",
+            "graph_explorer",
+        ]
+        if not forms:
+            widgets = [name for name in widgets if name != "data_entry_panel"]
+        return {
+            "template": "tile_grid",
+            "widgets": widgets,
+            "focus": "data_entry_panel" if forms else "chat_feed",
+        }
+    return {
+        "template": "split_pane",
+        "widgets": ["chat_feed", "routing_summary_panel", "rule_probes"],
+        "focus": "chat_feed",
+    }
+
+
+def pending_forms_for(
+    directives: list[dict[str, Any]] | None,
+    playbook: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Forms named by the directives route_entry actually returned."""
+    forms = (playbook or {}).get("forms") or {}
+    if not isinstance(forms, dict):
+        return []
+    found: list[dict[str, Any]] = []
+    for directive in directives or []:
+        form_id = str(directive.get("form") or "").strip()
+        spec = forms.get(form_id)
+        if not form_id or not isinstance(spec, dict):
+            continue
+        found.append(
+            {
+                "form_id": form_id,
+                "lane": str(directive.get("lane") or ""),
+                "title": str(spec.get("title") or form_id),
+                "submit_intent": str(spec.get("submit_intent") or "submit_fact_form"),
+                "fields": list(spec.get("fields") or []),
+            }
+        )
+    return found
+
+
+def synthesize_lane_response(
+    directives: list[dict[str, Any]] | None,
+    checks: list[dict[str, Any]] | None,
+    pending_forms: list[dict[str, Any]] | None,
+    speaking_lane: str,
+    playbook: dict[str, Any] | None,
+    recorded: dict[str, Any] | None = None,
+) -> str:
+    """User-facing sentence after routing. The specialist's own text stays in debug_cot."""
+    lane = str(speaking_lane or "")
+    parts: list[str] = []
+    if recorded:
+        rendered = ", ".join(f"{key} {_fact_text(value)}" for key, value in recorded.items())
+        parts.append(f"Recorded {rendered}.")
+    rows = list(directives or [])
+    gate = next((item for item in rows if item.get("blocking") is True), None)
+    if gate is not None and str(gate.get("lane") or "") != lane:
+        parts.append(
+            f"{lane} is paused because blocking gate {gate.get('lane')} "
+            f"({gate.get('next_step')} — {gate.get('routing_reason')}) is now active."
+        )
+    else:
+        match = next((item for item in rows if str(item.get("lane") or "") == lane), None)
+        if match is not None:
+            sentence = (
+                f"{match.get('agent_role')} is on {match.get('next_step')}. "
+                f"{match.get('routing_reason')}"
+            )
+            title = next(
+                (
+                    str(form.get("title") or "")
+                    for form in (pending_forms or [])
+                    if str(form.get("lane") or "") == lane and form.get("title")
+                ),
+                "",
+            )
+            if title:
+                sentence += f" Form: {title}."
+            if match.get("terminal") is True:
+                sentence += " This step is terminal."
+            parts.append(sentence.strip())
+        else:
+            active = [str(item.get("lane") or "") for item in rows if item.get("lane")]
+            listed = ", ".join(active) if active else "none"
+            parts.append(f"{lane} has no remaining active probes. Active lanes: {listed}.")
+    clause = _check_clause(checks or [], lane, playbook or {})
+    if clause:
+        parts.append(clause)
+    return " ".join(parts)
+
+
+def _fact_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _check_clause(
+    checks: list[dict[str, Any]],
+    speaking_lane: str,
+    playbook: dict[str, Any],
+) -> str:
+    pieces: list[str] = []
+    for check in checks:
+        action = _playbook_action(playbook, check.get("probe_id"))
+        action_lane = str(action.get("lane") or "")
+        if action_lane != speaking_lane and action.get("blocking") is not True:
+            continue
+        pieces.append(f"{check.get('title')} ({check.get('status')})")
+    if not pieces:
+        return ""
+    return "Checks: " + "; ".join(pieces) + "."
+
+
+def _playbook_action(playbook: dict[str, Any], probe_id: Any) -> dict[str, Any]:
+    key = str(probe_id or "")
+    if key == "default_action":
+        action = playbook.get("default_action") or {}
+        return action if isinstance(action, dict) else {}
+    if key == "exception_review":
+        action = playbook.get("exception_review") or {}
+        return action if isinstance(action, dict) else {}
+    entries = (playbook.get("actions") or {}).get(key)
+    if isinstance(entries, list):
+        for action in entries:
+            if isinstance(action, dict):
+                return action
+    return {}
+
+
 def load_lane_transcript(entity_id: str, lane: str) -> list[dict[str, Any]]:
     entity = reject_entity_id(entity_id)
     safe_lane = sanitize_lane(lane)

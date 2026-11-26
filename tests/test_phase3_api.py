@@ -89,13 +89,14 @@ def test_chat_envelope_routes_submission(monkeypatch, tmp_path: Path):
     assert body["meta"]["terminal"] is True
     assert any(line.startswith("evaluate_playbook ") for line in body["meta"]["debug_cot"])
     assert "run_named_write write_submission_decline" in body["meta"]["debug_cot"]
-    assert body["layout"]["widgets"] == ["chat_feed", "routing_summary_panel"]
+    assert body["layout"]["widgets"] == ["chat_feed", "routing_summary_panel", "rule_probes"]
     assert body["layout"] == {
         "template": "split_pane",
-        "widgets": ["chat_feed", "routing_summary_panel"],
+        "widgets": ["chat_feed", "routing_summary_panel", "rule_probes"],
         "focus": "chat_feed",
     }
-    assert body["content"]["chat_text"] == SPECIALIST_TEXT
+    assert "DECLINE_UNINSURABLE_CLASS" in body["content"]["chat_text"]
+    assert SPECIALIST_TEXT in body["meta"]["debug_cot"]
     assert body["content"]["routing_summary"]["next_step"] == "DECLINE_UNINSURABLE_CLASS"
     assert body["content"]["routing_summary"]["agent_role"] == "UnderwritingIntakeSpecialist"
     assert body["content"]["routing_summary"]["lane"] == "DECLINE"
@@ -113,6 +114,7 @@ def test_chat_envelope_routes_submission(monkeypatch, tmp_path: Path):
                 "payload": {"entry_id": "9100"},
             }
         ],
+        "pending_forms": [],
     }
 
 
