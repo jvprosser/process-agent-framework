@@ -337,6 +337,26 @@ def _require_read(payload: dict[str, Any], label: str) -> dict[str, Any]:
     return payload
 
 
+def _missing_assertion_table(detail: object) -> bool:
+    text = str(detail).lower()
+    return (
+        "table_not_found" in text
+        or "could not resolve table reference" in text
+        or "table does not exist" in text
+        or "table not found" in text
+    )
+
+
+def _assertion_rows(label: str, params: dict) -> dict[str, Any]:
+    """A fact table that has not been created yet is an empty overlay."""
+    try:
+        return _require_read(_run_catalog("query", label, params), label)
+    except RuntimeError as exc:
+        if _missing_assertion_table(exc):
+            return {"assertions": []}
+        raise
+
+
 def _project_ontology_fields(entry: dict[str, Any], field_names: list[str]) -> None:
     """Keep ontology-declared keys present on the session entry."""
     for name in field_names:
@@ -350,7 +370,7 @@ def _apply_assertions(entry: dict[str, Any], manager: PackManager, entity: str) 
     lake: dict[str, Any] = {}
     label = str(manager.manifest.get("session_assertions") or "").strip()
     if label:
-        payload = _require_read(_run_catalog("query", label, _entity_params(manager, entity)), label)
+        payload = _assertion_rows(label, _entity_params(manager, entity))
         rows = payload.get("assertions")
         if isinstance(rows, list):
             for row in rows:

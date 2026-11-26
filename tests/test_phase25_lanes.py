@@ -168,6 +168,67 @@ def test_sidecar_evicts_when_the_lake_value_coerces_equal(tmp_path, monkeypatch)
     assert case["has_police_report"] in {True, "true"}
 
 
+def test_missing_assertion_table_still_builds_the_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
+    PackManager("claims", str(PACKS)).activate()
+    overrides = tmp_path / "entry_401_overrides.json"
+    overrides.write_text(
+        json.dumps(
+            {
+                "incident_report_number": {
+                    "value": "PR-8841",
+                    "asserted_by_role": "PdClaimsAgent",
+                    "lane": "PD",
+                    "http_run_id": "http-1",
+                    "asserted_at": "2026-11-24T15:30:00Z",
+                    "committed_to_lake": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_execute(op, label, params, manager):
+        if label == "get_claim_fact_assertions":
+            return {
+                "ok": False,
+                "error": (
+                    "TrinoUserError(type=USER_ERROR, name=TABLE_NOT_FOUND, "
+                    "message=\"Table 'iceberg.car_insurance_claims.claim_fact_assertions' does not exist\")"
+                ),
+            }
+        if label == "get_claim_spine":
+            return {"ok": True, "spine": [{"claim_id": 401, "policy_id": 1}]}
+        if label == "get_claim_routing_signals":
+            return {"ok": True, "signals": [{}]}
+        raise AssertionError(label)
+
+    monkeypatch.setattr(tools, "_call_mcp", fake_execute)
+    tools.build_session_graph("401")
+    case = json.loads((tmp_path / "entry_401_case.json").read_text(encoding="utf-8"))
+    assert case["entry_exists"] is True
+    assert case["incident_report_number"] == "PR-8841"
+    assert overrides.is_file()
+
+
+def test_assertion_read_failure_still_stops_the_graph(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
+    PackManager("claims", str(PACKS)).activate()
+
+    def fake_execute(op, label, params, manager):
+        if label == "get_claim_fact_assertions":
+            return {"ok": False, "error": "coordinator unavailable"}
+        if label == "get_claim_spine":
+            return {"ok": True, "spine": [{"claim_id": 401}]}
+        if label == "get_claim_routing_signals":
+            return {"ok": True, "signals": [{}]}
+        raise AssertionError(label)
+
+    monkeypatch.setattr(tools, "_call_mcp", fake_execute)
+    with pytest.raises(RuntimeError, match="coordinator unavailable"):
+        tools.build_session_graph("401")
+
+
 def test_flush_keeps_the_sidecar_when_the_insert_fails(tmp_path, monkeypatch):
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS)).activate()
