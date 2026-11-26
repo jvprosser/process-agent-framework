@@ -18,11 +18,15 @@ from core.tools import (
     run_named_query,
     run_named_write,
     set_assertion_context,
+    state_mutated,
 )
 from mistralai.client import Mistral
 
 _ROUTE_KEYS = ("next_step", "agent_role", "allowed_tools", "write")
-_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_THINK_BLOCK = re.compile(
+    r"<(think|thought)>.*?</\1>", re.DOTALL | re.IGNORECASE
+)
+_REASONING_TYPES = {"thinking", "reasoning", "thought"}
 _TOOL_CALL_BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL | re.IGNORECASE)
 _MODEL_ERRORS = (httpx.HTTPError, ConnectionError, TimeoutError)
 _CORE_TOOLS = {
@@ -201,7 +205,14 @@ def run_specialist(
         client, prompt, route_json, bound, allowed, write_label, pack, history
     )
     logs.extend(model_logs)
-    if write_label and not any(item.get("label") == write_label for item in invocations):
+    patched = state_mutated() and any(
+        item.get("tool") == "patch_session_field" for item in invocations
+    )
+    if (
+        write_label
+        and not patched
+        and not any(item.get("label") == write_label for item in invocations)
+    ):
         invocations.extend(_execute_write(write_label, route_json, pack))
         logs.append(f"run_named_write {write_label}")
     text = _sanitize_chat_text(text)
@@ -292,9 +303,15 @@ def _specialist_text(
     )
     if write_label:
         instruction += (
-            f"Call run_named_write once with label {write_label}. "
+            f"Call run_named_write once with label {write_label}, unless this "
+            "turn records a user fact with patch_session_field. "
         )
-    instruction += "Then reply with a short plain-language summary."
+    instruction += (
+        "Then reply with a short plain-language summary. "
+        "Respond directly to the user in plain, concise language. Do not include "
+        "internal planning, tool-call deliberation, or chain-of-thought reasoning "
+        "in your response."
+    )
     route_brief = json.dumps(
         {
             "routing_summary": route_json.get("routing_summary"),
@@ -351,7 +368,7 @@ def _specialist_text(
 def _sanitize_chat_text(raw_text: str) -> str:
     """Drop leaked chain-of-thought and XML tool calls from the UI reply."""
     raw = raw_text or ""
-    closer = re.search(r"</think>", raw, flags=re.IGNORECASE)
+    closer = re.search(r"</(think|thought)>", raw, flags=re.IGNORECASE)
     if closer and _TOOL_CALL_BLOCK.search(raw[closer.end() :]):
         after = _remainder_after_think(raw[closer.end() :])
         if after:
@@ -362,8 +379,8 @@ def _sanitize_chat_text(raw_text: str) -> str:
 
 def _remainder_after_think(raw_text: str) -> str:
     clean = _THINK_BLOCK.sub("", raw_text or "")
-    clean = re.sub(r"<think>.*", "", clean, flags=re.DOTALL | re.IGNORECASE)
-    clean = re.sub(r"</think>", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"<(think|thought)>.*", "", clean, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r"</(think|thought)>", "", clean, flags=re.IGNORECASE)
     clean = _TOOL_CALL_BLOCK.sub("", clean)
     return clean.strip()
 
@@ -589,7 +606,7 @@ def _choice_message(response: Any) -> Any:
 
 def _message_lines(prefix: str, message: Any) -> list[str]:
     lines: list[str] = []
-    reasoning = _field(message, "reasoning") or _field(message, "reasoning_content")
+    reasoning = _reasoning_text(message)
     if reasoning:
         lines.append(f"{prefix} reasoning: {reasoning}")
     content = _content(message)
@@ -612,11 +629,66 @@ def _field(message: Any, name: str) -> str:
 
 
 def _content(message: Any) -> str:
-    if isinstance(message, dict):
-        value = message.get("content")
+    visible, _ = _split_message_text(message)
+    return visible
+
+
+def _reasoning_text(message: Any) -> str:
+    _, reasoning = _split_message_text(message)
+    return reasoning
+
+
+def _split_message_text(message: Any) -> tuple[str, str]:
+    """Separate a user-facing reply from reasoning the model attached."""
+    extras: list[str] = []
+    for name in ("reasoning_content", "reasoning"):
+        value = _field(message, name)
+        if value:
+            extras.append(value)
+    content = _raw_content(message)
+    visible_parts: list[str] = []
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, str):
+                visible_parts.append(part)
+                continue
+            if not isinstance(part, dict):
+                continue
+            kind = str(part.get("type") or "").lower()
+            text = _part_text(part)
+            if kind in _REASONING_TYPES:
+                if text:
+                    extras.append(text)
+            elif text:
+                visible_parts.append(text)
+        raw = "\n".join(visible_parts)
+    elif isinstance(content, str):
+        raw = content
     else:
-        value = getattr(message, "content", None)
-    return value if isinstance(value, str) else ""
+        raw = ""
+    visible, tagged = _split_tagged(raw)
+    if tagged:
+        extras.append(tagged)
+    return visible, "\n".join(extras)
+
+
+def _raw_content(message: Any) -> Any:
+    if isinstance(message, dict):
+        return message.get("content")
+    return getattr(message, "content", None)
+
+
+def _part_text(part: dict[str, Any]) -> str:
+    for key in ("thinking", "reasoning", "text", "content"):
+        value = part.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _split_tagged(raw: str) -> tuple[str, str]:
+    tags = [match.group(0) for match in _THINK_BLOCK.finditer(raw or "")]
+    return _sanitize_chat_text(raw), "\n".join(tags)
 
 
 def _tool_calls(message: Any) -> list[Any]:

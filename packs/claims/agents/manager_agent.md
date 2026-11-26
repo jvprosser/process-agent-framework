@@ -4,9 +4,6 @@ NL interface for structured claim intake. Lake reads go through the Studio
 tool `run_named_catalog`. Build, validate, and YAML playbook route are
 deterministic. This agent is **not** the router (probes + playbook are).
 
-CrewAI `coworker` must match **Role** exactly: `Intake Agent`.
-
-
 ## Studio fields
 
 ### Name
@@ -110,28 +107,16 @@ Do **not** run specialist views or audit writes after `route_claim`. Orchestrato
 
 Intake Agent must be in the **same Crew** as Orchestrator (and Litigation / Routing).
 
-## Orchestrator delegate tasks
+## Runtime context
 
-One-shot catalog list:
+The Python runtime injects the active directive (`lane`, `next_step`, `routing_reason`, `write`, `allowed_tools`) and the pre-read `view_data`. Do not infer or guess `next_step` from examples.
 
-```text
-coworker: Intake Agent
-task: Call run_named_catalog once with op list. Return the exact JSON. Do not
-run structured claim intake. Do not call any other tool.
-```
-
-Structured claim intake:
-
-```text
-coworker: Intake Agent
-task: Structured claim intake for claim_id 402 —
-run_named_catalog op query label get_claim_spine, then get_claim_routing_signals,
-then build, validate, route. STOP after route_claim. Return routing_summary
-verbatim plus a json block with next_step, agent_role, lane,
-letter_on_request, coworker, write, task_type_code. Do not mention
-probe ids. Do not call specialist view labels or write audit.
-```
+Respond with a concise, direct answer for the user. Do not output internal reasoning, tool-selection plans, or step-by-step thoughts.
 
 ## Session facts
 
-When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+When the user provides a missing case fact, call `patch_session_field(field, value)` with the exact ontology field name. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+
+On that turn, do not call `run_named_write`, and do not re-run the pre-read `get_*` query already supplied in `view_data`.
+
+After `patch_session_field` succeeds, reply in one or two sentences confirming the recorded value and the next action this lane still needs, or that the lane is being re-evaluated.

@@ -2,8 +2,8 @@
 
 Use when `route_claim` assigns `PdClaimsAgent` /
 `CollectIncidentReportNumber` / `WaitForIncidentNumber` /
-`RequestPoliceReport` / `DetermineFault` / `PdClaimsReview`. `next_step`
-from Orchestrator chooses the write.
+`RequestPoliceReport` / `DetermineFault` / `PdClaimsReview`.
+The playbook directive supplies the write.
 
 `CollectIncidentReportNumber` sends an SMS (Iceberg row; no carrier) and
 writes a session copy (`claim_<id>_sms.txt`) when `sms_written` is true.
@@ -12,8 +12,6 @@ only, no second SMS. `RequestPoliceReport`
 means a police-report request letter is **recommended**; draft it only when
 the user asks. That letter must cite the **incident report number**, not the
 claim id.
-
-CrewAI `coworker` must match **Role** exactly: `PD Claims Agent`.
 
 E2e intake of seeded **401** (police + fault present) often lands on
 subrogation or PD review. Smoke `CollectIncidentReportNumber` after deleting
@@ -51,8 +49,7 @@ or a CLM- claim number as the police lookup key.
 
 ### Goal
 ```text
-Given claim_id, run_id, and next_step from Orchestrator
-(default claim_id=401, run_id=demo-401-pd, next_step=PdClaimsReview):
+Use the active directive supplied by the runtime.
 
 WRITE LETTER (only if the user asked to write, draft, or generate a letter
 or police-report request). next_step must be RequestPoliceReport. Call
@@ -128,25 +125,24 @@ sms_written is true; RequestPoliceReport letter only when the user asks).
 | Use | Tool | Flat Action Input |
 |---|---|---|
 | Read | `run_named_query` | `{"label":"get_pd_view","claim_id":"401"}` |
-| Task write | `run_named_write` | `{"label":"create_pd_task","run_id":"demo-401-pd","event_json":"{...}"}` |
-| Wait audit | `run_named_write` | `{"label":"write_audit_event","run_id":"demo-401-pd","event_json":"{...}"}` |
-| Letter / SMS file | `save_claim_letter` | `{"claim_id":"401","run_id":"demo-401-pd","next_step":"CollectIncidentReportNumber","body":"..."}` |
+| Task write | `run_named_write` | `{"label":"create_pd_task","run_id":"<run_id>","event_json":"{...}"}` |
+| Wait audit | `run_named_write` | `{"label":"write_audit_event","run_id":"<run_id>","event_json":"{...}"}` |
+| Letter / SMS file | `save_claim_letter` | `{"claim_id":"401","run_id":"<run_id>","next_step":"CollectIncidentReportNumber","body":"..."}` |
 
 Do not attach spine/signals or build/validate/route. Do not call `save_claim_letter`
 on WaitForIncidentNumber, DetermineFault, or PdClaimsReview. On RequestPoliceReport, call it only if
 the user asked to write the letter. On CollectIncidentReportNumber, save the SMS copy only when sms_written is true.
 
-## Orchestrator delegate task
+## Runtime context
 
-```text
-coworker: PD Claims Agent
-task: claim_id=401 run_id=demo-401-pd next_step=PdClaimsReview.
-Call run_named_query once with {"label":"get_pd_view","claim_id":"401"}.
-Then run_named_write once with label create_pd_task,
-event_json task_type_code PD_REVIEW.
-Do not save_claim_letter. Return summary + exact JSON.
-```
+The Python runtime injects the active directive (`lane`, `next_step`, `routing_reason`, `write`, `allowed_tools`) and the pre-read `view_data`. Do not infer or guess `next_step` from examples.
+
+Respond with a concise, direct answer for the user. Do not output internal reasoning, tool-selection plans, or step-by-step thoughts.
 
 ## Session facts
 
-When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+When the user provides a missing case fact, call `patch_session_field(field, value)` with the exact ontology field name. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+
+On that turn, do not call `run_named_write`, and do not re-run the pre-read `get_*` query already supplied in `view_data`.
+
+After `patch_session_field` succeeds, reply in one or two sentences confirming the recorded value and the next action this lane still needs, or that the lane is being re-evaluated.

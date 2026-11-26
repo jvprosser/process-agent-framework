@@ -1,11 +1,9 @@
 # Litigation Agent (configured in Agent Studio)
 
 Use when cosine or `route_claim` assigns `LitigationAgent` (claim **402** live seed:
-`EscalateDiscovery` / R1.2b). `next_step` from Orchestrator chooses the write.
+`EscalateDiscovery` / R1.2b). The playbook directive supplies the write.
 `LitigationSupport` means a hold/status letter is **recommended**; draft it only
 when the user asks.
-
-CrewAI `coworker` must match **Role** exactly: `Litigation Agent`.
 
 ## Studio fields
 
@@ -33,8 +31,7 @@ You do not re-decide the lane.
 
 ### Goal
 ```text
-Given claim_id, run_id, and next_step from Orchestrator
-(default claim_id=402, run_id=demo-402-e2e, next_step=EscalateDiscovery):
+Use the active directive supplied by the runtime.
 
 WRITE LETTER (only if the user asked to write, draft, or generate a letter
 or email). next_step must be LitigationSupport (or the user named a hold/
@@ -95,17 +92,16 @@ Do not attach spine/signals or build/validate/route. Do not call `save_claim_let
 on CompleteLitigationFile or EscalateDiscovery. Do not call it on LitigationSupport
 unless the user asked to write the letter.
 
-## Orchestrator delegate task
+## Runtime context
 
-```text
-coworker: Litigation Agent
-task: claim_id=402 run_id=demo-402-e2e next_step=EscalateDiscovery.
-Call run_named_query once with {"label":"get_litigation_view","claim_id":"402"}.
-Then run_named_write once with label create_litigation_task,
-event_json task_type_code ESCALATE_DISCOVERY.
-Do not save_claim_letter. Return summary + exact JSON.
-```
+The Python runtime injects the active directive (`lane`, `next_step`, `routing_reason`, `write`, `allowed_tools`) and the pre-read `view_data`. Do not infer or guess `next_step` from examples.
+
+Respond with a concise, direct answer for the user. Do not output internal reasoning, tool-selection plans, or step-by-step thoughts.
 
 ## Session facts
 
-When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+When the user provides a missing case fact, call `patch_session_field(field, value)` with the exact ontology field name. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+
+On that turn, do not call `run_named_write`, and do not re-run the pre-read `get_*` query already supplied in `view_data`.
+
+After `patch_session_field` succeeds, reply in one or two sentences confirming the recorded value and the next action this lane still needs, or that the lane is being re-evaluated.

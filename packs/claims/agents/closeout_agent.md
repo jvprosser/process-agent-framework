@@ -3,8 +3,6 @@
 Use when `route_claim` assigns `CloseoutAgent` / `CloseoutAudit` (seed claim **403**
 is CLOSED). No specialist view — audit write then promote only.
 
-CrewAI `coworker` must match **Role** exactly: `Closeout Agent`.
-
 Impala promote is table-append: rows are already on main. Expect
 `mode: table_append` and `named_op: promote_audit_run`.
 
@@ -30,7 +28,7 @@ intake. If a tool returns error or 401, Final Answer with that JSON and stop.
 
 ### Goal
 ```text
-Given claim_id and run_id (default claim_id=403, run_id=demo-403-close if omitted):
+Use the active directive supplied by the runtime.
 
 1) Call run_named_write ONCE:
    Action Input (flat):
@@ -61,16 +59,16 @@ Attach the claims MCP (V7: `run_named_write`).
 
 Do not attach spine/signals, views, or build/validate/route.
 
-## Orchestrator delegate task
+## Runtime context
 
-```text
-coworker: Closeout Agent
-task: claim_id=403 run_id=demo-403-close.
-Call run_named_write once with label write_audit_event.
-Then run_named_write once with label promote_audit_run.
-Return summary + exact JSON.
-```
+The Python runtime injects the active directive (`lane`, `next_step`, `routing_reason`, `write`, `allowed_tools`) and the pre-read `view_data`. Do not infer or guess `next_step` from examples.
+
+Respond with a concise, direct answer for the user. Do not output internal reasoning, tool-selection plans, or step-by-step thoughts.
 
 ## Session facts
 
-When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+When the user provides a missing case fact, call `patch_session_field(field, value)` with the exact ontology field name. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+
+On that turn, do not call `run_named_write`, and do not re-run the pre-read `get_*` query already supplied in `view_data`.
+
+After `patch_session_field` succeeds, reply in one or two sentences confirming the recorded value and the next action this lane still needs, or that the lane is being re-evaluated.

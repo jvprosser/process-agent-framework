@@ -9,8 +9,6 @@ DUI or racing. **Do not** call `deny_claim`. **Do not** set `DENIED`.
 Default playbook fallback `HumanReviewOrWait` is still route-JSON-only on
 Orchestrator; this agent is configured in Agent Studio for `HumanCitationReview`.
 
-CrewAI `coworker` must match **Role** exactly: `Human Review Agent`.
-
 No `letter_on_request` on this step. Do not call `save_claim_letter`.
 
 ## Studio fields
@@ -38,8 +36,7 @@ lane and you do not deny the claim.
 
 ### Goal
 ```text
-Given claim_id or fnol_id, run_id, and next_step from Orchestrator
-(default claim_id=401, run_id=demo-401-cite, next_step=HumanCitationReview):
+Use the active directive supplied by the runtime.
 
 FNOL ADJUSTER REVIEW (next_step FnolAdjusterReview):
 1) Call run_named_query ONCE:
@@ -83,16 +80,16 @@ Attach the claims MCP (V7: `run_named_query` / `run_named_write`).
 Do not attach spine/signals or build/validate/route. Do not call `deny_claim`.
 Do not attach `save_claim_letter`.
 
-## Orchestrator delegate task
+## Runtime context
 
-```text
-coworker: Human Review Agent
-task: claim_id=401 run_id=demo-401-cite next_step=HumanCitationReview.
-Call run_named_query once with {"label":"get_deny_view","claim_id":"401"}.
-Then run_named_write once with label write_audit_event.
-Do not deny_claim. Do not save_claim_letter. Return summary + exact JSON.
-```
+The Python runtime injects the active directive (`lane`, `next_step`, `routing_reason`, `write`, `allowed_tools`) and the pre-read `view_data`. Do not infer or guess `next_step` from examples.
+
+Respond with a concise, direct answer for the user. Do not output internal reasoning, tool-selection plans, or step-by-step thoughts.
 
 ## Session facts
 
-When the user supplies a missing case fact, call `patch_session_field` with the ontology field name and the value they gave. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+When the user provides a missing case fact, call `patch_session_field(field, value)` with the exact ontology field name. Claims fields include `incident_report_number` and `has_police_report`. Do not invent field names. Do not construct `event_json`.
+
+On that turn, do not call `run_named_write`, and do not re-run the pre-read `get_*` query already supplied in `view_data`.
+
+After `patch_session_field` succeeds, reply in one or two sentences confirming the recorded value and the next action this lane still needs, or that the lane is being re-evaluated.
