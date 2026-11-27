@@ -32,9 +32,12 @@ from core.tools import (
     catalog_dialect,
     evaluate_playbook,
     flush_fact_assertions,
+    patch_session_field,
     reset_assertion_state,
+    set_assertion_context,
     state_mutated,
 )
+from core.turn_classifier import classify_turn, coerce_fact_value, declared_lanes
 
 _PACKS = Path(__file__).resolve().parents[2] / "packs"
 _MISSING_ID = "I couldn't find an ID in your request. Include the entity id and try again."
@@ -309,6 +312,37 @@ def _recorded_facts(entity_id: str, http_run_id: str) -> dict[str, Any]:
     return found
 
 
+def _agent_for_lane(directives: list[dict[str, Any]], lane: str) -> str | None:
+    for item in directives:
+        if str(item.get("lane") or "") == lane and item.get("agent_role"):
+            return str(item.get("agent_role"))
+    return None
+
+
+def _question_line(field_id: str, value: Any) -> str:
+    if value is None or value == "":
+        return f"{field_id} is not on file yet."
+    if isinstance(value, bool):
+        shown = "True" if value else "False"
+    else:
+        shown = value
+    return f"{field_id} is {shown}."
+
+
+def _append_exchange(
+    entity_id: str,
+    lane: str,
+    user_text: str,
+    assistant_text: str,
+    agent_role: str | None,
+) -> list[dict[str, Any]]:
+    transcript = load_lane_transcript(entity_id, lane)
+    transcript.append(_stamp("user", None, lane, user_text))
+    transcript.append(_stamp("assistant", agent_role, lane, assistant_text))
+    save_lane_transcript(entity_id, lane, transcript)
+    return transcript
+
+
 def _stamp(role: str, agent_role: str | None, lane: str, text: str) -> dict[str, Any]:
     return {
         "role": role,
@@ -317,6 +351,105 @@ def _stamp(role: str, agent_role: str | None, lane: str, text: str) -> dict[str,
         "text": text,
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+
+
+def _classified_turn(
+    *,
+    pack: PackManager,
+    pack_id: str,
+    run_id: str,
+    entity_id: str,
+    lane: str,
+    user_text: str,
+    dialect: str,
+    turn: Any,
+    route: dict[str, Any],
+    directives: list[dict[str, Any]],
+    intake_cot: list[str],
+) -> ChatResponse:
+    """Fact and question turns stay on the requested lane and skip the specialist."""
+    gate = next((item for item in directives if item.get("blocking") is True), None)
+    if gate is None:
+        active = any(str(item.get("lane") or "") == lane for item in directives)
+    else:
+        active = lane in declared_lanes(pack.playbook)
+    if not active:
+        return _response(
+            pack_id=pack_id,
+            run_id=run_id,
+            entity_id=entity_id,
+            terminal=False,
+            dialect=dialect,
+            chat_text=f"Lane {lane} has no active directive.",
+            routing_summary=_summary_from(project_directive(directives, lane)),
+            checks=list(route.get("checks") or []),
+            directives=directives,
+            debug_cot=intake_cot,
+            playbook=pack.playbook,
+        )
+
+    field_id = str(turn.field_id or "")
+    if turn.kind == "question":
+        reply = _question_line(field_id, _session_graph(entity_id).get(field_id))
+        final_route = route
+        final_directives = directives
+    elif field_id in set(pack.derived):
+        reply = f"{field_id} is a derived field and cannot be set directly."
+        final_route = route
+        final_directives = directives
+    else:
+        try:
+            coerced = coerce_fact_value(field_id, str(turn.value or ""), pack)
+        except ValueError:
+            reply = f"The value for {field_id} could not be coerced and was not recorded."
+            final_route = route
+            final_directives = directives
+        else:
+            set_assertion_context(role="UserLaneChat", lane=lane, http_run_id=run_id)
+            patch_session_field(field_id, coerced)
+            if state_mutated():
+                flush_fact_assertions(entity_id)
+                pack.activate()
+                build_session_graph(entity_id)
+                final_route = evaluate_playbook()
+                final_directives = _directives_of(final_route)
+            else:
+                final_route = route
+                final_directives = directives
+            forms = pending_forms_for(final_directives, pack.playbook)
+            reply = synthesize_lane_response(
+                final_directives,
+                list(final_route.get("checks") or []),
+                forms,
+                lane,
+                pack.playbook,
+                {field_id: coerced},
+            )
+    projected = project_directive(final_directives, lane)
+    transcript = _append_exchange(
+        entity_id,
+        lane,
+        user_text,
+        reply,
+        _agent_for_lane(final_directives, lane),
+    )
+    acted = {"letter_on_request": bool((projected or {}).get("letter_on_request"))}
+    return _response(
+        pack_id=pack_id,
+        run_id=run_id,
+        entity_id=entity_id,
+        active_lane=lane,
+        terminal=bool((projected or {}).get("terminal", False)),
+        dialect=dialect,
+        chat_text=reply,
+        routing_summary=_summary_from(projected),
+        checks=list(final_route.get("checks") or []),
+        route=acted,
+        directives=final_directives,
+        lane_messages=transcript,
+        debug_cot=intake_cot,
+        playbook=pack.playbook,
+    )
 
 
 @router.post("/api/v1/chat", response_model=ChatResponse)
@@ -353,6 +486,24 @@ def chat(request: ChatRequest) -> ChatResponse:
 
         route = run_intake(entity_id, client, pack)
         directives = _directives_of(route)
+        intake_cot = [str(line) for line in (route.get("debug_cot") or [])]
+        requested_lane = str(request.lane or "").strip()
+        if supplied and requested_lane:
+            turn = classify_turn(request.user_text, pack)
+            if turn.kind in {"fact", "question"}:
+                return _classified_turn(
+                    pack=pack,
+                    pack_id=request.pack_id,
+                    run_id=run_id,
+                    entity_id=entity_id,
+                    lane=requested_lane,
+                    user_text=request.user_text,
+                    dialect=dialect,
+                    turn=turn,
+                    route=route,
+                    directives=directives,
+                    intake_cot=intake_cot,
+                )
         selected, notice = select_directive(directives, request.lane)
         if selected is None:
             return _response(

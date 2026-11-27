@@ -114,7 +114,7 @@ def _post(monkeypatch, tmp_path, specialist):
     response = TestClient(app).post(
         "/api/v1/chat",
         json={
-            "user_text": "The police incident report number is INC-2025-9999",
+            "user_text": "write the police-report letter",
             "pack_id": "claims",
             "entity_id": "401",
             "lane": "PD",

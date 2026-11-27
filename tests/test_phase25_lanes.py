@@ -373,7 +373,7 @@ def test_turn_two_skips_the_orchestrator_and_advances_pd_once(monkeypatch, tmp_p
     assert response.status_code == 200
     body = response.json()
     assert client.chat.parse_calls == 0
-    assert client.chat.complete_calls == 2
+    assert client.chat.complete_calls == 1
     pd = next(item for item in body["content"]["routing_directives"] if item["lane"] == "PD")
     assert pd["next_step"] == "RequestPoliceReport"
     assert body["content"]["routing_summary"]["next_step"] == "RequestPoliceReport"
