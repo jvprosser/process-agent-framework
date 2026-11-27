@@ -7,6 +7,7 @@ from typing import Any
 
 import celpy
 from celpy.adapter import json_to_cel
+from celpy.celtypes import BoolType
 from celpy.evaluation import CELEvalError
 
 _ENV = celpy.Environment()
@@ -86,3 +87,32 @@ def eval_cel(expr: str, entry: dict[str, Any], pack_graph: dict[str, Any]) -> bo
     if isinstance(result, CELEvalError):
         return False
     return bool(result)
+
+
+def eval_cel_value(expr: str, entry: dict[str, Any], pack_graph: dict[str, Any]) -> Any:
+    """Return the CEL value evaluated on the graph-coerced entry."""
+    program = compile_cel(expr)
+    activation = json_to_cel(flatten_entry(entry, pack_graph))
+    try:
+        result = program.evaluate(activation)
+    except CELEvalError as exc:
+        raise RuntimeError(str(exc)) from exc
+    if isinstance(result, CELEvalError):
+        raise RuntimeError(str(result))
+    return _cel_python(result)
+
+
+def _cel_python(result: Any) -> Any:
+    if isinstance(result, BoolType):
+        return bool(result)
+    if isinstance(result, bool):
+        return result
+    if isinstance(result, str):
+        return str(result)
+    if isinstance(result, int):
+        return int(result)
+    if isinstance(result, float):
+        return float(result)
+    if isinstance(result, list):
+        return [_cel_python(item) for item in result]
+    return result

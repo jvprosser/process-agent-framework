@@ -214,6 +214,53 @@ def _validate_playbook(playbook: dict[str, Any], pack_graph: dict[str, Any] | No
     validate_playbook_forms(playbook, graph=pack_graph)
 
 
+def load_derived(
+    raw: Any,
+    ontology_fields: set[str],
+    playbook: dict[str, Any],
+    pack_name: str,
+) -> dict[str, str]:
+    """Validate an optional pack.yaml derived map. Missing means no derived fields."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise RuntimeError(f"Pack '{pack_name}' derived must be a mapping")
+    from rules_engine.graph.cel_rules import compile_cel
+
+    derived: dict[str, str] = {}
+    for key, expr in raw.items():
+        name = str(key).strip()
+        if name in _RESERVED_FORM_FIELDS:
+            raise RuntimeError(f"Pack '{pack_name}' derived field '{name}' is reserved")
+        if name not in ontology_fields:
+            raise RuntimeError(
+                f"Pack '{pack_name}' derived field '{name}' is not an ontology fact"
+            )
+        if not isinstance(expr, str) or not expr.strip():
+            raise RuntimeError(f"Pack '{pack_name}' derived field '{name}' has invalid CEL")
+        try:
+            compile_cel(expr)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Pack '{pack_name}' derived field '{name}' has invalid CEL: {exc}"
+            ) from exc
+        derived[name] = expr.strip()
+    forms = playbook.get("forms") or {}
+    if isinstance(forms, dict):
+        for form_id, spec in forms.items():
+            if not isinstance(spec, dict):
+                continue
+            for field in spec.get("fields") or []:
+                if not isinstance(field, dict):
+                    continue
+                field_id = str(field.get("id") or "").strip()
+                if field_id in derived:
+                    raise RuntimeError(
+                        f"Playbook form '{form_id}' field '{field_id}' is a derived field"
+                    )
+    return derived
+
+
 def validate_playbook_forms(
     playbook: dict[str, Any],
     ontology_fields: set[str] | None = None,

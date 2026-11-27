@@ -7,6 +7,8 @@ fact_assertion_write: write_claim_fact_assertions
 session_assertions: get_claim_fact_assertions
 ontology: ontology/claims.json
 playbook: playbook/playbook.yaml
+derived:
+  has_incident_report_number: 'incident_report_number != ""'
 graph:
   strings:
     - docket_number

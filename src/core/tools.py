@@ -106,6 +106,7 @@ def build_session_graph(entry_id: str) -> dict:
     )
     _project_ontology_fields(entry, manager.ontology_field_names())
     _apply_assertions(entry, manager, entity)
+    _apply_derived(entry, manager)
     path = graph_artifact_path(entity)
     write_json_artifact(path, entry)
     _session_entity_id = entity
@@ -189,6 +190,8 @@ def patch_session_field(field: str, value: Any) -> dict:
     name = str(field or "").strip()
     if name in _RESERVED_FIELDS or name not in set(manager.ontology_field_names()):
         raise RuntimeError(f"field is not an ontology fact: {name}")
+    if name in set(getattr(manager, "derived", None) or {}):
+        raise RuntimeError(f"{name} is a derived field and cannot be set directly.")
     entity = str(_session_entity_id or "").strip()
     if not entity:
         raise RuntimeError("No session entry is materialized. Call build_session_graph first.")
@@ -399,6 +402,21 @@ def _apply_assertions(entry: dict[str, Any], manager: PackManager, entity: str) 
             path.write_text(json.dumps(kept, indent=2) + "\n", encoding="utf-8")
         elif path.is_file():
             path.unlink()
+
+
+def _apply_derived(entry: dict[str, Any], manager: PackManager) -> None:
+    """Recompute declared fields from the coerced entry before the case is saved."""
+    derived = dict(getattr(manager, "derived", None) or {})
+    if not derived:
+        return
+    graph = dict(manager.manifest.get("graph") or {})
+    from rules_engine.graph.cel_rules import eval_cel_value
+
+    for name, expr in derived.items():
+        try:
+            entry[name] = eval_cel_value(expr, entry, graph)
+        except RuntimeError as exc:
+            raise RuntimeError(f"derived field '{name}' failed: {exc}") from exc
 
 
 def _coerce_field(field: str, value: Any, graph: dict[str, Any]) -> Any:

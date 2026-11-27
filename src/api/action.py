@@ -146,10 +146,16 @@ def _submit_fact_form(
         if name not in facts or facts[name] is None:
             raise HTTPException(status_code=400, detail=f"required field {name} is missing")
     allowed = set(pack.ontology_field_names())
+    derived = set(pack.derived)
     for name in facts:
         if name in _RESERVED or name not in allowed:
             raise HTTPException(
                 status_code=400, detail=f"field is not an ontology fact: {name}"
+            )
+        if name in derived:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} is a derived field and cannot be set directly.",
             )
     set_assertion_context(role="UserFormSubmission", lane=lane, http_run_id=http_run_id)
     for name, value in facts.items():
