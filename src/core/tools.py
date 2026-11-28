@@ -12,6 +12,7 @@ from typing import Any
 
 from mistralai import agents
 
+from core.config import fact_assertions_enabled
 from core.pack_manager import PackManager
 
 tool = agents.tool
@@ -105,7 +106,8 @@ def build_session_graph(entry_id: str) -> dict:
         signals=signals,
     )
     _project_ontology_fields(entry, manager.ontology_field_names())
-    _apply_assertions(entry, manager, entity)
+    if fact_assertions_enabled():
+        _apply_assertions(entry, manager, entity)
     _apply_derived(entry, manager)
     path = graph_artifact_path(entity)
     write_json_artifact(path, entry)
@@ -186,6 +188,8 @@ def patch_session_field(field: str, value: Any) -> dict:
 
     The playbook still chooses the next step. This does not write the lake.
     """
+    if not fact_assertions_enabled():
+        raise RuntimeError("Fact assertions are currently disabled.")
     manager = PackManager.active()
     name = str(field or "").strip()
     if name in _RESERVED_FIELDS or name not in set(manager.ontology_field_names()):
@@ -216,6 +220,8 @@ def patch_session_field(field: str, value: Any) -> dict:
 
 def flush_fact_assertions(entity_id: str) -> bool:
     """Insert uncommitted sidecar facts once. Leave them uncommitted on failure."""
+    if not fact_assertions_enabled():
+        return False
     manager = PackManager.active()
     label = str(manager.manifest.get("fact_assertion_write") or "").strip()
     entity = str(entity_id or "").strip()

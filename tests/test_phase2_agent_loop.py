@@ -106,6 +106,7 @@ def test_intake_returns_playbook_route_not_the_model_text(monkeypatch, tmp_path:
 
 
 def test_specialist_loads_role_prompt_and_executes_the_write(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     _catalog(monkeypatch)
     pack = PackManager("underwriting", str(PACKS))

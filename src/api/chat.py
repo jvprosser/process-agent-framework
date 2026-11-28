@@ -25,6 +25,7 @@ from core.agent_loop import (
     select_directive,
     synthesize_lane_response,
 )
+from core.config import fact_assertions_enabled
 from core.mistral_client import local_client
 from core.pack_manager import PackManager
 from core.tools import (
@@ -391,6 +392,10 @@ def _classified_turn(
     field_id = str(turn.field_id or "")
     if turn.kind == "question":
         reply = _question_line(field_id, _session_graph(entity_id).get(field_id))
+        final_route = route
+        final_directives = directives
+    elif not fact_assertions_enabled():
+        reply = "Direct fact overrides are currently disabled."
         final_route = route
         final_directives = directives
     elif field_id in set(pack.derived):

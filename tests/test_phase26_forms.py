@@ -148,6 +148,7 @@ def _catalog(monkeypatch):
 
 
 def test_submit_fact_form_advances_pd_and_accepts_false(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     _catalog(monkeypatch)
     client = TestClient(app)

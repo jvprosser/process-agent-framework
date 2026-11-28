@@ -76,6 +76,7 @@ def test_pack_load_rejects_a_form_that_collects_a_derived_field(tmp_path):
 
 
 def test_patch_rejects_a_derived_field_without_writing_the_sidecar(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS))
     tools._session_entity_id = "401"
@@ -102,6 +103,7 @@ def _catalog(monkeypatch, signals: dict) -> None:
 
 
 def test_graph_recomputes_has_incident_report_number(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS)).activate()
     overrides = tmp_path / "entry_401_overrides.json"
@@ -143,6 +145,7 @@ def test_graph_recomputes_has_incident_report_number(tmp_path, monkeypatch):
 
 
 def test_submit_fact_form_rejects_a_derived_field(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     _catalog(monkeypatch, {"incident_report_number": "", "has_incident_report_number": False})
     response = TestClient(app).post(

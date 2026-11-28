@@ -145,6 +145,7 @@ def test_strict_coercion_rejects_silent_fallbacks():
 
 
 def test_fact_turn_records_the_number_and_recomputes_the_derived_flag(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     body, writes, client = _post(
         monkeypatch,
         tmp_path,
@@ -174,6 +175,7 @@ def test_fact_turn_records_the_number_and_recomputes_the_derived_flag(monkeypatc
 
 
 def test_fact_on_a_derived_field_is_rejected_without_a_write(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     body, writes, client = _post(
         monkeypatch,
         tmp_path,
@@ -197,6 +199,7 @@ def test_fact_on_a_derived_field_is_rejected_without_a_write(monkeypatch, tmp_pa
 
 
 def test_questions_read_stored_derived_zero_false_and_missing_values(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     writes: list[str] = []
     _open_claim(monkeypatch, writes)
@@ -305,6 +308,7 @@ def test_questions_read_stored_derived_zero_false_and_missing_values(monkeypatch
 
 
 def test_fact_and_question_stay_on_pd_while_a_gate_is_up(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     body, _writes, client = _post(
         monkeypatch,
         tmp_path,
@@ -377,6 +381,7 @@ def test_directives_still_reach_the_specialist(monkeypatch, tmp_path):
 
 
 def test_coercion_failures_stay_on_the_lane_without_a_write(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     samples = (
         ("has police report is maybe", "has_police_report"),
         ("estimated loss amount is twelve", "estimated_loss_amount"),

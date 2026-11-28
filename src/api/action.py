@@ -20,6 +20,7 @@ from core.agent_loop import (
     save_lane_transcript,
     synthesize_lane_response,
 )
+from core.config import fact_assertions_enabled
 from core.pack_manager import PackManager
 from core.tools import (
     CORE_TOOLS,
@@ -211,6 +212,9 @@ def action(request: ActionRequest) -> ActionResponse:
         catalog_dialect(request.dialect, pack)
     except RuntimeError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if request.intent == "submit_fact_form" and not fact_assertions_enabled():
+        raise HTTPException(status_code=403, detail="Fact assertions are currently disabled.")
 
     entity_id = _entity_id(request)
     http_run_id = str(request.run_id or "").strip() or str(uuid.uuid4())

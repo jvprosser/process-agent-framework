@@ -191,6 +191,7 @@ def test_thought_tags_stay_in_debug_cot(monkeypatch, tmp_path):
 
 
 def test_patch_turn_skips_the_stale_write(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     call = _Call(
         "patch_session_field",
         json.dumps({"field": "incident_report_number", "value": "INC-2025-9999"}),

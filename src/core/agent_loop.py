@@ -177,6 +177,10 @@ def pending_forms_for(
     playbook: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     """Forms named by the directives route_entry actually returned."""
+    from core.config import fact_assertions_enabled
+
+    if not fact_assertions_enabled():
+        return []
     forms = (playbook or {}).get("forms") or {}
     if not isinstance(forms, dict):
         return []
@@ -637,7 +641,9 @@ def _bound_tools(pack: PackManager, allowed: list[str]) -> list[Any]:
     allowed_set = set(allowed)
     reads = set((pack.catalog.get("reads") or {}))
     writes = set((pack.catalog.get("writes") or {}))
-    bound = [patch_session_field]
+    from core.config import fact_assertions_enabled
+
+    bound = [patch_session_field] if fact_assertions_enabled() else []
     if "run_named_write" in allowed_set or allowed_set & writes:
         bound.append(run_named_write)
     if "run_named_query" in allowed_set or allowed_set & reads:

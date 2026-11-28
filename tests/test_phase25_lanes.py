@@ -136,6 +136,7 @@ def test_retirement_packs_emit_directives_with_explicit_lanes():
 
 
 def test_patch_session_field_rejects_reserved_and_unknown_keys(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS))
     tools._session_entity_id = "401"
@@ -148,6 +149,7 @@ def test_patch_session_field_rejects_reserved_and_unknown_keys(tmp_path, monkeyp
 
 
 def test_sidecar_evicts_when_the_lake_value_coerces_equal(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS)).activate()
     overrides = tmp_path / "entry_401_overrides.json"
@@ -184,6 +186,7 @@ def test_sidecar_evicts_when_the_lake_value_coerces_equal(tmp_path, monkeypatch)
 
 
 def test_missing_assertion_table_still_builds_the_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS)).activate()
     overrides = tmp_path / "entry_401_overrides.json"
@@ -227,6 +230,7 @@ def test_missing_assertion_table_still_builds_the_session(tmp_path, monkeypatch)
 
 
 def test_assertion_read_failure_still_stops_the_graph(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS)).activate()
 
@@ -245,6 +249,7 @@ def test_assertion_read_failure_still_stops_the_graph(tmp_path, monkeypatch):
 
 
 def test_flush_keeps_the_sidecar_when_the_insert_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     PackManager("claims", str(PACKS)).activate()
     tools._session_entity_id = "401"
@@ -357,6 +362,7 @@ def _claims_catalog(monkeypatch, *, write_ok=True):
 
 
 def test_turn_two_skips_the_orchestrator_and_advances_pd_once(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACT_ASSERTIONS_ENABLED", "true")
     monkeypatch.setenv("SESSION_DIRECTORY", str(tmp_path))
     client = _Client()
     _claims_catalog(monkeypatch)
